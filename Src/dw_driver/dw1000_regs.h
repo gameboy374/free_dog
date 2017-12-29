@@ -41,6 +41,7 @@ extern "C" {
  * @brief Bit definitions for register PANADR
 **/
 #define PANADR_ID               0x03            /* PAN ID (31:16) and Short Address (15:0) */
+#define PANADR_ID_OFFSET         0
 #define PANADR_LEN              (4)
 /*mask and shift */
 #define PANADR_SHORT_ADDR_OFFSET 0              /* In bytes */
@@ -110,6 +111,7 @@ extern "C" {
  * @brief Bit definitions for register TX_FCTRL
 **/
 #define TX_FCTRL_ID             0x08            /* Transmit Frame Control */
+#define TX_FCTRL_OFFSET          0
 #define TX_FCTRL_LEN            (5)             /* Note 40 bit register */
 /*masks (low 32 bit) */
 #define TX_FCTRL_TFLEN_MASK     0x0000007FUL    /* bit mask to access Transmit Frame Length */
@@ -536,6 +538,7 @@ extern "C" {
  * @brief Bit definitions for register CHAN_CTRL
 **/
 #define CHAN_CTRL_ID            0x1F            /* Channel Control */
+#define CHAN_CTRL_OFFSET         0
 #define CHAN_CTRL_LEN           (4)
 /*mask and shift */
 #define CHAN_CTRL_MASK          0xFFFF00FFUL    /* Channel Control Register access mask */

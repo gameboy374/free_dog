@@ -1,20 +1,41 @@
 #include "dw1000.h"
-#include "dw1000_type.h"
 #include "..\board_config.h"
 #include <string.h>
-#include <stdbool.h>
+
+/**************/
+#define     TWR_ANCHOR              0
+#define     TWR_TAG                 1
+#define     CURRENT_TAG             TWR_TAG
+/**************/
 
 #define DW_MAX_TXBUF              16
 #define DW_MAX_RXBUF              16
 
+static unsigned int timeout;
 static unsigned char TX_BUFFER[DW_MAX_TXBUF] = {0};
 static unsigned char RX_BUFFER[DW_MAX_RXBUF] = {0};
 SPI_HandleTypeDef DW_SPI_HANDLE;
 dwOps_t     Ops_t;
 DwDevice_st dw_devcie;
 static uwbConfig_t config_t = {
-  .address = {0,0,0,0,0,0,0xcf,0xbc},
+    .mdoe = 0,
+    .address = {0,0,0,0,0,0,0xcf,0xbc},
+    .anchorListSize = 0,
+    .anchors = {0},
+    .position = {0.0},
+    .positionEnabled = 0,
 };
+struct {
+  uwbAlgorithm_t *algorithm;
+  char *name;
+} availableAlgorithms[] = {
+  {.algorithm = &uwbTwrAnchorAlgorithm, .name = "TWR Anchor"},
+  {.algorithm = &uwbTwrTagAlgorithm,    .name = "TWR Tag"},
+  //{.algorithm = &uwbSnifferAlgorithm,   .name = "Sniffer"},
+  //{.algorithm = &uwbTdoa2Algorithm,     .name = "TDoA Anchor V2"},
+  {NULL, NULL},
+};
+static uwbAlgorithm_t *algorithm = NULL;
 
 static void DW_ReadData(DwDevice_st *dev, unsigned short regAddr, unsigned short subIndex, void *readBuf, unsigned int lens )
 {
@@ -103,32 +124,6 @@ static unsigned int DW_ReadDeviceID()
     return ID;
 }
 
-static void DW_SetClock(dwClock_t clock)
-{
-    unsigned char pmscctrl0[PMSC_CTRL0_LEN];
-    memset(pmscctrl0, 0, PMSC_CTRL0_LEN);
-    dw_devcie.ops->spiRead(&dw_devcie, PMSC_ID, PMSC_CTRL0_OFFSET, pmscctrl0, PMSC_CTRL0_LEN);
-    if(clock == dwClockAuto) {
-    dw_devcie.ops->spiSetSpeed(&dw_devcie, SPI_BAUDRATEPRESCALER_64);
-        pmscctrl0[0] = dwClockAuto;
-        pmscctrl0[1] &= 0xFE;
-    } else if(clock == dwClockXti) {
-    dw_devcie.ops->spiSetSpeed(&dw_devcie, SPI_BAUDRATEPRESCALER_64);
-        pmscctrl0[0] &= 0xFC;
-        pmscctrl0[0] |= dwClockXti;
-    } else if(clock == dwClockPll) {
-    dw_devcie.ops->spiSetSpeed(&dw_devcie, SPI_BAUDRATEPRESCALER_4);
-        pmscctrl0[0] &= 0xFC;
-        pmscctrl0[0] |= dwClockPll;
-    } else {
-      // TODO deliver proper warning
-    }
-    //refer to demo code
-    dw_devcie.ops->spiWrite(&dw_devcie, PMSC_ID, PMSC_CTRL0_OFFSET, pmscctrl0, 1);
-    dw_devcie.ops->spiWrite(&dw_devcie, PMSC_ID, PMSC_CTRL0_OFFSET + 1, pmscctrl0, 1);
-
-}
-
 static void DW_GPIO_Config(void)
 {
     GPIO_InitTypeDef GPIO_InitStruct;
@@ -183,6 +178,24 @@ static void DW_SPI_Config(void)
     }
 }
 
+static void txcallback(DwDevice_st *dev)
+{
+  timeout = algorithm->onEvent(dev, eventPacketSent);
+}
+
+static void rxcallback(DwDevice_st *dev)
+{
+  timeout = algorithm->onEvent(dev, eventPacketReceived);
+}
+
+static void rxTimeoutCallback(DwDevice_st * dev) {
+  timeout = algorithm->onEvent(dev, eventReceiveTimeout);
+}
+
+static void rxfailedcallback(DwDevice_st *dev) {
+  timeout = algorithm->onEvent(dev, eventReceiveFailed);
+}
+
 /************************Register Configurate Start**************************/
 static void DW_SetDoubleBuffering(DwDevice_st* dev, bool val)
 {
@@ -207,19 +220,147 @@ static void DW_SetInterruptPolarity(DwDevice_st* dev, bool val)
         dev->syscfg &= ~SYS_CFG_HIRQ_POL;
     }
 }
+
+static void DW_UseExtendedFrameLength(DwDevice_st* dev, bool val) {
+    if(val)
+    {
+        dev->extendedFrameLength = FRAME_LENGTH_EXTENDED;
+        dev->syscfg |= SYS_CFG_PHR_MODE_11;
+    }
+    else
+    {
+        dev->extendedFrameLength = FRAME_LENGTH_NORMAL;
+        dev->syscfg &= ~SYS_CFG_PHR_MODE_11;
+    }
+}
+
+static void DW_UseSmartPower(DwDevice_st* dev, bool smartPower) {
+    dev->smartPower = smartPower;
+    if(!smartPower)
+    {
+        dev->syscfg |= SYS_CFG_DIS_STXP;
+    }
+    else
+    {
+        dev->syscfg &= ~SYS_CFG_DIS_STXP;
+    }
+}
 /************************Register Configurate End**************************/
 
 
 /************************Register Read/Write Start**************************/
 static void DW_WriteSystemConfigurationRegister(DwDevice_st* dev) {
-	dev->ops->spiWrite(dev, SYS_CFG_ID, SYS_CFG_OFFSET, dev->syscfg, SYS_CFG_LEN);
+	dev->ops->spiWrite(dev, SYS_CFG_ID, SYS_CFG_OFFSET, &dev->syscfg, SYS_CFG_LEN);
 }
 
 static void DW_WriteSystemEventMaskRegister(DwDevice_st* dev) {
-	dev->ops->spiWrite(dev, SYS_MASK_ID, SYS_MASK_OFFSET, dev->sysmask, SYS_MASK_LEN);
+	dev->ops->spiWrite(dev, SYS_MASK_ID, SYS_MASK_OFFSET, &dev->sysmask, SYS_MASK_LEN);
 }
 
+static void DW_ReadNetworkIdAndDeviceAddress(DwDevice_st* dev) {
+	dev->ops->spiRead(dev, PANADR_ID, PANADR_ID_OFFSET, &dev->networkAndAddress, PANADR_LEN);
+}
+
+static void DW_ReadSystemConfigurationRegister(DwDevice_st* dev) {
+	dev->ops->spiRead(dev, SYS_CFG_ID, SYS_CFG_OFFSET, &dev->syscfg, SYS_CFG_LEN);
+}
+
+static void DW_ReadChannelControlRegister(DwDevice_st* dev) {
+	dev->ops->spiRead(dev, CHAN_CTRL_ID, CHAN_CTRL_OFFSET, &dev->chanctrl, CHAN_CTRL_LEN);
+}
+
+static void DW_ReadTransmitFrameControlRegister(DwDevice_st* dev) {
+	dev->ops->spiRead(dev, TX_FCTRL_ID, TX_FCTRL_OFFSET, dev->txfctrl, TX_FCTRL_LEN);
+}
+
+static void DW_ReadSystemEventMaskRegister(DwDevice_st* dev) {
+	dev->ops->spiRead(dev, SYS_MASK_ID, SYS_MASK_OFFSET, &dev->sysmask, SYS_MASK_LEN);
+}
 /************************Register Read/Write End**************************/
+static void DW_AttachSentHandler(DwDevice_st *dev, dwHandler_t handler)
+{
+  dev->handleSent = handler;
+}
+
+static void DW_AttachReceivedHandler(DwDevice_st *dev, dwHandler_t handler)
+{
+  dev->handleReceived = handler;
+}
+
+static void DW_AttachReceiveTimeoutHandler(DwDevice_st *dev, dwHandler_t handler) {
+  dev->handleReceiveTimeout = handler;
+}
+
+static void DW_AttachReceiveFailedHandler(DwDevice_st *dev, dwHandler_t handler) {
+  dev->handleReceiveFailed = handler;
+}
+
+static void DW_GetConfiguration(DwDevice_st* dev) {
+	DW_Idle(dev);
+	DW_ReadNetworkIdAndDeviceAddress(dev);
+	DW_ReadSystemConfigurationRegister(dev);
+	DW_ReadChannelControlRegister(dev);
+	DW_ReadTransmitFrameControlRegister(dev);
+	DW_ReadSystemEventMaskRegister(dev);
+}
+
+static void DW_SetDefaults(DwDevice_st* dev) {
+	if(dev->deviceMode == TX_MODE) {
+
+	} else if(dev->deviceMode == RX_MODE) {
+
+	} else if(dev->deviceMode == IDLE_MODE) {
+        DW_UseExtendedFrameLength(dev, false);
+        DW_UseSmartPower(dev, false);
+        dwSuppressFrameCheck(dev, false);
+        //for global frame filtering
+        dwSetFrameFilter(dev, false);
+        //for data frame (poll, poll_ack, range, range report, range failed) filtering
+        dwSetFrameFilterAllowData(dev, false);
+        //for reserved (blink) frame filtering
+        dwSetFrameFilterAllowReserved(dev, false);
+        //setFrameFilterAllowMAC(true);
+        //setFrameFilterAllowBeacon(true);
+        //setFrameFilterAllowAcknowledgement(true);
+        dwInterruptOnSent(dev, true);
+        dwInterruptOnReceived(dev, true);
+        dwInterruptOnReceiveTimeout(dev, true);
+        dwInterruptOnReceiveFailed(dev, false);
+        dwInterruptOnReceiveTimestampAvailable(dev, false);
+        dwInterruptOnAutomaticAcknowledgeTrigger(dev, false);
+        dwSetReceiverAutoReenable(dev, true);
+        // default mode when powering up the chip
+        // still explicitly selected for later tuning
+        dwEnableMode(dev, MODE_LONGDATA_RANGE_LOWPOWER);
+	}
+}
+
+static void DW_SetClock(dwClock_t clock)
+{
+    unsigned char pmscctrl0[PMSC_CTRL0_LEN];
+    memset(pmscctrl0, 0, PMSC_CTRL0_LEN);
+    dw_devcie.ops->spiRead(&dw_devcie, PMSC_ID, PMSC_CTRL0_OFFSET, pmscctrl0, PMSC_CTRL0_LEN);
+    if(clock == dwClockAuto) {
+    dw_devcie.ops->spiSetSpeed(&dw_devcie, SPI_BAUDRATEPRESCALER_64);
+        pmscctrl0[0] = dwClockAuto;
+        pmscctrl0[1] &= 0xFE;
+    } else if(clock == dwClockXti) {
+    dw_devcie.ops->spiSetSpeed(&dw_devcie, SPI_BAUDRATEPRESCALER_64);
+        pmscctrl0[0] &= 0xFC;
+        pmscctrl0[0] |= dwClockXti;
+    } else if(clock == dwClockPll) {
+    dw_devcie.ops->spiSetSpeed(&dw_devcie, SPI_BAUDRATEPRESCALER_4);
+        pmscctrl0[0] &= 0xFC;
+        pmscctrl0[0] |= dwClockPll;
+    } else {
+      // TODO deliver proper warning
+    }
+    //refer to demo code
+    dw_devcie.ops->spiWrite(&dw_devcie, PMSC_ID, PMSC_CTRL0_OFFSET, pmscctrl0, 1);
+    dw_devcie.ops->spiWrite(&dw_devcie, PMSC_ID, PMSC_CTRL0_OFFSET + 1, pmscctrl0, 1);
+
+}
+
 static void DW_Idle(DwDevice_st* dev)
 {
    memset(dev->sysctrl, 0, SYS_CTRL_LEN);
@@ -284,19 +425,19 @@ static void DW_EnableAllLeds(DwDevice_st* dev)
 
 static void DW_SoftReset(DwDevice_st* dev)
 {
-  unsigned char pmscctrl0[PMSC_CTRL0_LEN];
+    unsigned char pmscctrl0[PMSC_CTRL0_LEN];
 
-  dev->ops->spiRead(dev, PMSC_ID, PMSC_CTRL0_OFFSET, pmscctrl0, PMSC_CTRL0_LEN);
-  pmscctrl0[0] = 0x01;
-  dev->ops->spiWrite(dev, PMSC_ID, PMSC_CTRL0_OFFSET, pmscctrl0, PMSC_CTRL0_LEN);
-  pmscctrl0[3] = 0x00;
-  dev->ops->spiWrite(dev, PMSC_ID, PMSC_CTRL0_OFFSET, pmscctrl0, PMSC_CTRL0_LEN);
-  dev->ops->delayms(10);
-  pmscctrl0[0] = 0x00;
-  pmscctrl0[3] = 0xF0;
-  dev->ops->spiWrite(dev, PMSC_ID, PMSC_CTRL0_OFFSET, pmscctrl0, PMSC_CTRL0_LEN);
-  // force into idle mode
-  DW_Idle(dev);
+    dev->ops->spiRead(dev, PMSC_ID, PMSC_CTRL0_OFFSET, pmscctrl0, PMSC_CTRL0_LEN);
+    pmscctrl0[0] = 0x01;
+    dev->ops->spiWrite(dev, PMSC_ID, PMSC_CTRL0_OFFSET, pmscctrl0, PMSC_CTRL0_LEN);
+    pmscctrl0[3] = 0x00;
+    dev->ops->spiWrite(dev, PMSC_ID, PMSC_CTRL0_OFFSET, pmscctrl0, PMSC_CTRL0_LEN);
+    dev->ops->delayms(10);
+    pmscctrl0[0] = 0x00;
+    pmscctrl0[3] = 0xF0;
+    dev->ops->spiWrite(dev, PMSC_ID, PMSC_CTRL0_OFFSET, pmscctrl0, PMSC_CTRL0_LEN);
+    // force into idle mode
+    DW_Idle(dev);
 }
 static void DW_Devcie_Init( DwDevice_st *dev )
 {
@@ -304,10 +445,16 @@ static void DW_Devcie_Init( DwDevice_st *dev )
     dev->spiSpeed  = SPI_BAUDRATEPRESCALER_64;
     dev->dwclock   = dwClockAuto;
     dev->deviceMode = IDLE_MODE;
+    dev->extendedFrameLength = FRAME_LENGTH_NORMAL;
+    dev->smartPower = false;
     
     memset(&dev->networkAndAddress, 0xff, PANADR_LEN);   //Be the broadcast PAN and SHORT_ADDR ID (0xFFFF)
     memset(&dev->syscfg, 0, SYS_CFG_LEN);
     memset(&dev->sysctrl, 0, SYS_CTRL_LEN);
+    memset(&dev->sysmask, 0, SYS_MASK_LEN);              //clear interrupt flag
+    memset(&dev->chanctrl, 0, CHAN_CTRL_LEN);
+    memset(dev->txfctrl, 0, TX_FCTRL_LEN);
+
     dev->ops                = &Ops_t;
     dev->ops->spiRead       = &DW_ReadData;
     dev->ops->spiWrite      = &DW_WriteData;
@@ -345,8 +492,7 @@ static HAL_StatusTypeDef DW_Config( DwDevice_st *dev)
     DW_SetDoubleBuffering(dev, false);              
     DW_SetInterruptPolarity(dev, true);
     DW_WriteSystemConfigurationRegister(dev);
-    //clear interrupt flag
-    memset(dev->sysmask, 0, SYS_MASK_LEN);
+
     DW_WriteSystemEventMaskRegister(dev);
     //LDE
     DW_SetClock(dwClockXti);
@@ -371,7 +517,25 @@ HAL_StatusTypeDef DW_Init(void)
     }
     DW_EnableAllLeds(&dw_devcie);
 
-    
+    if(CURRENT_TAG == TWR_TAG)
+    {
+        //TODO:configurate config_t
+    }
+    else if(CURRENT_TAG == TWR_ANCHOR)
+    {
+        //TODO:configurate config_ts
+    }
+    algorithm = availableAlgorithms[CURRENT_TAG].algorithm;
+
+    DW_AttachSentHandler(&dw_devcie, txcallback);
+    DW_AttachReceivedHandler(&dw_devcie, rxcallback);
+    DW_AttachReceiveTimeoutHandler(&dw_devcie, rxTimeoutCallback);
+    DW_AttachReceiveFailedHandler(&dw_devcie, rxfailedcallback);
+
+    DW_GetConfiguration(&dw_devcie);
+    DW_SetDefaults(&dw_devcie);
+
+
     return hal_status;
 }
 

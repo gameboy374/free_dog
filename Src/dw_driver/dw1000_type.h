@@ -2,6 +2,7 @@
 #define __DW1000_TYPE_H__
 #include "stm32f1xx.h"
 #include "dw1000_regs.h"
+#include <stdbool.h>
 
 typedef enum{
     dwClockAuto = 0x00,
@@ -29,13 +30,18 @@ typedef struct {
   //state
   unsigned char spiSpeed;
   dwClock_t    dwclock;
-  unsigned char *deviceMode;
+  unsigned char deviceMode;
   //reg
   unsigned int networkAndAddress;   //4byte
   unsigned int syscfg;              //4byte
   unsigned int sysctrl;             //4byte
   unsigned int sysmask;             //4byte
-
+  unsigned int chanctrl;            //4byte
+  unsigned char txfctrl[TX_FCTRL_LEN];
+  //
+  unsigned char extendedFrameLength;
+  bool smartPower;
+  //other config
   dwTime_t antennaDelay;
   //RTX
   unsigned short txBufLens;
@@ -43,6 +49,8 @@ typedef struct {
   unsigned char *pTxBuf;
   unsigned char *pRxBuf;
 } __attribute__((aligned)) DwDevice_st;
+
+typedef void (*dwHandler_t)(struct DwDevice_st *dev);
 
 typedef struct dwOps_s{
   /**
