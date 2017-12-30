@@ -41,6 +41,7 @@ typedef struct {
   //
   unsigned char extendedFrameLength;
   bool smartPower;
+  bool frameCheck;
   //other config
   dwTime_t antennaDelay;
   //RTX

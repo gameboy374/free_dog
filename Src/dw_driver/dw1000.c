@@ -245,6 +245,122 @@ static void DW_UseSmartPower(DwDevice_st* dev, bool smartPower) {
         dev->syscfg &= ~SYS_CFG_DIS_STXP;
     }
 }
+
+static void DW_SuppressFrameCheck(DwDevice_st* dev, bool val) {
+	dev->frameCheck = val;
+}
+
+static void DW_SetFrameFilter(DwDevice_st* dev, bool val) {
+    if(val)
+    {
+        dev->syscfg |= SYS_CFG_FFE;
+    }
+    else
+    {
+        dev->syscfg &= ~SYS_CFG_FFE;
+    }
+}
+
+static void DW_SetFrameFilterAllowData(DwDevice_st* dev, bool val) {
+    if(val)
+    {
+        dev->syscfg |= SYS_CFG_FFAD;
+    }
+    else
+    {
+        dev->syscfg &= ~SYS_CFG_FFAD;
+    }
+}
+
+static void DW_SetFrameFilterAllowReserved(DwDevice_st* dev, bool val) {
+    if(val)
+    {
+        dev->syscfg |= SYS_CFG_FFAR;
+    }
+    else
+    {
+        dev->syscfg &= ~SYS_CFG_FFAR;
+    }
+}
+
+static void DW_InterruptOnSent(DwDevice_st* dev, bool val) {
+    if(val)
+    {
+        dev->sysmask |= SYS_MASK_MTXFRS;
+    }
+    else
+    {
+        dev->sysmask &= ~SYS_MASK_MTXFRS;
+    }
+}
+
+static void DW_InterruptOnReceived(DwDevice_st* dev, bool val) {
+    if(val)
+    {
+        dev->sysmask |= (SYS_MASK_MRXDFR + SYS_MASK_MRXFCG);
+    }
+    else
+    {
+        dev->sysmask &= ~(SYS_MASK_MRXDFR + SYS_MASK_MRXFCG);
+    }
+}
+
+static void DW_InterruptOnReceiveTimeout(DwDevice_st* dev, bool val) {
+    if(val)
+    {
+        dev->sysmask |= SYS_MASK_MRXRFTO;
+    }
+    else
+    {
+        dev->sysmask &= ~SYS_MASK_MRXRFTO;
+    }
+}
+
+static void DW_InterruptOnReceiveFailed(DwDevice_st* dev, bool val) {
+    if(val)
+    {
+        dev->sysmask |= (SYS_MASK_MRXPHE+SYS_MASK_MRXFCE+SYS_MASK_MRXRFSL+SYS_MASK_MLDEERR);
+    }
+    else
+    {
+        dev->sysmask &= ~(SYS_MASK_MRXPHE+SYS_MASK_MRXFCE+SYS_MASK_MRXRFSL+SYS_MASK_MLDEERR);
+    }
+}
+
+static void DW_InterruptOnReceiveTimestampAvailable(DwDevice_st* dev, bool val) {
+    if(val)
+    {
+        dev->sysmask |= SYS_MASK_MLDEDONE;
+    }
+    else
+    {
+        dev->sysmask &= ~SYS_MASK_MLDEDONE;
+    }
+}
+
+static void DW_InterruptOnAutomaticAcknowledgeTrigger(DwDevice_st* dev, bool val) {
+    if(val)
+    {
+        dev->sysmask |= SYS_MASK_MAAT;
+    }
+    else
+    {
+        dev->sysmask &= ~SYS_MASK_MAAT;
+    }
+}
+
+static void DW_SetReceiverAutoReenable(DwDevice_st* dev, bool val) {
+    if(val)
+    {
+        dev->syscfg |= SYS_CFG_RXAUTR;
+    }
+    else
+    {
+        dev->syscfg &= ~SYS_CFG_RXAUTR;
+    }
+}
+
+
 /************************Register Configurate End**************************/
 
 
@@ -312,23 +428,21 @@ static void DW_SetDefaults(DwDevice_st* dev) {
 	} else if(dev->deviceMode == IDLE_MODE) {
         DW_UseExtendedFrameLength(dev, false);
         DW_UseSmartPower(dev, false);
-        dwSuppressFrameCheck(dev, false);
+        DW_SuppressFrameCheck(dev, false);
         //for global frame filtering
-        dwSetFrameFilter(dev, false);
+        DW_SetFrameFilter(dev, false);
         //for data frame (poll, poll_ack, range, range report, range failed) filtering
-        dwSetFrameFilterAllowData(dev, false);
+        DW_SetFrameFilterAllowData(dev, false);
         //for reserved (blink) frame filtering
-        dwSetFrameFilterAllowReserved(dev, false);
-        //setFrameFilterAllowMAC(true);
-        //setFrameFilterAllowBeacon(true);
-        //setFrameFilterAllowAcknowledgement(true);
-        dwInterruptOnSent(dev, true);
-        dwInterruptOnReceived(dev, true);
-        dwInterruptOnReceiveTimeout(dev, true);
-        dwInterruptOnReceiveFailed(dev, false);
-        dwInterruptOnReceiveTimestampAvailable(dev, false);
-        dwInterruptOnAutomaticAcknowledgeTrigger(dev, false);
-        dwSetReceiverAutoReenable(dev, true);
+        DW_SetFrameFilterAllowReserved(dev, false);
+        
+        DW_InterruptOnSent(dev, true);
+        DW_InterruptOnReceived(dev, true);
+        DW_InterruptOnReceiveTimeout(dev, true);
+        DW_InterruptOnReceiveFailed(dev, false);
+        DW_InterruptOnReceiveTimestampAvailable(dev, false);
+        DW_InterruptOnAutomaticAcknowledgeTrigger(dev, false);
+        DW_SetReceiverAutoReenable(dev, true);
         // default mode when powering up the chip
         // still explicitly selected for later tuning
         dwEnableMode(dev, MODE_LONGDATA_RANGE_LOWPOWER);
@@ -447,7 +561,8 @@ static void DW_Devcie_Init( DwDevice_st *dev )
     dev->deviceMode = IDLE_MODE;
     dev->extendedFrameLength = FRAME_LENGTH_NORMAL;
     dev->smartPower = false;
-    
+    dev->frameCheck = true;
+
     memset(&dev->networkAndAddress, 0xff, PANADR_LEN);   //Be the broadcast PAN and SHORT_ADDR ID (0xFFFF)
     memset(&dev->syscfg, 0, SYS_CFG_LEN);
     memset(&dev->sysctrl, 0, SYS_CTRL_LEN);
