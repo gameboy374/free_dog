@@ -579,6 +579,7 @@ extern "C" {
  *        Please read User Manual : User defined SFD sequence
 **/
 #define USR_SFD_ID              0x21            /* User-specified short/long TX/RX SFD sequences */
+#define USR_SFD_OFFSET          0
 #define USR_SFD_LEN             (41)
 #define DW_NS_SFD_LEN_110K      64              /* Decawave non-standard SFD length for 110 kbps */
 #define DW_NS_SFD_LEN_850K      16              /* Decawave non-standard SFD length for 850 kbps */

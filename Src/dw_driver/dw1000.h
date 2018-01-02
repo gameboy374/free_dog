@@ -39,6 +39,59 @@ typedef struct uwbAlgorithm_s {
 #define FRAME_LENGTH_NORMAL 0x00
 #define FRAME_LENGTH_EXTENDED 0x03
 
+/* Settings */
+// transmission/reception bit rate
+#define TRX_RATE_110KBPS 0x00
+#define TRX_RATE_850KBPS 0x01
+#define TRX_RATE_6800KBPS 0x02
+
+// transmission pulse frequency
+// 0x00 is 4MHZ, but receiver in DW1000 does not support it (!??)
+#define TX_PULSE_FREQ_16MHZ 0x01
+#define TX_PULSE_FREQ_64MHZ 0x02
+
+// preamble length (PE + TXPSR bits)
+#define TX_PREAMBLE_LEN_64 0x01
+#define TX_PREAMBLE_LEN_128 0x05
+#define TX_PREAMBLE_LEN_256 0x09
+#define TX_PREAMBLE_LEN_512 0x0D
+#define TX_PREAMBLE_LEN_1024 0x02
+#define TX_PREAMBLE_LEN_1536 0x06
+#define TX_PREAMBLE_LEN_2048 0x0A
+#define TX_PREAMBLE_LEN_4096 0x03
+
+// PAC size. */
+#define PAC_SIZE_8 8
+#define PAC_SIZE_16 16
+#define PAC_SIZE_32 32
+#define PAC_SIZE_64 64
+
+/* channel of operation. */
+#define CHANNEL_1 1
+#define CHANNEL_2 2
+#define CHANNEL_3 3
+#define CHANNEL_4 4
+#define CHANNEL_5 5
+#define CHANNEL_7 7
+
+/* preamble codes. */
+#define PREAMBLE_CODE_16MHZ_1 1
+#define PREAMBLE_CODE_16MHZ_2 2
+#define PREAMBLE_CODE_16MHZ_3 3
+#define PREAMBLE_CODE_16MHZ_4 4
+#define PREAMBLE_CODE_16MHZ_5 5
+#define PREAMBLE_CODE_16MHZ_6 6
+#define PREAMBLE_CODE_16MHZ_7 7
+#define PREAMBLE_CODE_16MHZ_8 8
+#define PREAMBLE_CODE_64MHZ_9 9
+#define PREAMBLE_CODE_64MHZ_10 10
+#define PREAMBLE_CODE_64MHZ_11 11
+#define PREAMBLE_CODE_64MHZ_12 12
+#define PREAMBLE_CODE_64MHZ_17 17
+#define PREAMBLE_CODE_64MHZ_18 18
+#define PREAMBLE_CODE_64MHZ_19 19
+#define PREAMBLE_CODE_64MHZ_20 20
+
 HAL_StatusTypeDef DW_Init(void);
 
 #endif

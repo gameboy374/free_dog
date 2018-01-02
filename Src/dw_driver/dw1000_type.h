@@ -40,6 +40,12 @@ typedef struct {
   unsigned char txfctrl[TX_FCTRL_LEN];
   //
   unsigned char extendedFrameLength;
+  unsigned char dataRate;
+  unsigned char pulseFrequency;
+  unsigned char preambleLength;
+  unsigned char preambleCode;
+  unsigned char pacSize;
+  unsigned char channel;
   bool smartPower;
   bool frameCheck;
   //other config
