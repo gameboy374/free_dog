@@ -514,6 +514,7 @@ extern "C" {
  * @brief Bit definitions for register TX_POWER
 **/
 #define TX_POWER_ID             0x1E            /* TX Power Control */
+#define TX_POWER_OFFSET          0
 #define TX_POWER_LEN            (4)
 /*mask and shift definition for Smart Transmit Power Control*/
 #define TX_POWER_BOOSTNORM_MASK 0x00000000UL    /* This is the normal power setting used for frames that do not fall */
@@ -989,7 +990,7 @@ extern "C" {
 #define FS_RES1_LEN             (7)
 /* offset from FS_CTRL_ID in bytes */
 #define FS_PLLCFG_OFFSET        0x07            /* Frequency synthesiser – PLL configuration */
-#define FS_PLLCFG_LEN           (5)
+#define FS_PLLCFG_LEN           (4)
 #define FS_PLLCFG_CH1           0x09000407UL    /* Operating Channel 1 */
 #define FS_PLLCFG_CH2           0x08400508UL    /* Operating Channel 2 */
 #define FS_PLLCFG_CH3           0x08401009UL    /* Operating Channel 3 */

@@ -44,6 +44,13 @@ struct {
 };
 static uwbAlgorithm_t *algorithm = NULL;
 
+static void writeValueToBytes(unsigned char data[], long val, unsigned int n) {
+	unsigned int i;
+	for(i = 0; i < n; i++) {
+		data[i] = ((val >> (i * 8)) & 0xFF);
+	}
+}
+
 static void DW_ReadData(DwDevice_st *dev, unsigned short regAddr, unsigned short subIndex, void *readBuf, unsigned int lens )
 {
   unsigned char header[3];
@@ -534,51 +541,51 @@ static void DW_GetConfiguration(DwDevice_st* dev) {
 
 static void DW_Tune(DwDevice_st *dev) {
 	// these registers are going to be tuned/configured
-	uint8_t agctune1[LEN_AGC_TUNE1];
-	uint8_t agctune2[LEN_AGC_TUNE2];
-	uint8_t agctune3[LEN_AGC_TUNE3];
-	uint8_t drxtune0b[LEN_DRX_TUNE0b];
-	uint8_t drxtune1a[LEN_DRX_TUNE1a];
-	uint8_t drxtune1b[LEN_DRX_TUNE1b];
-	uint8_t drxtune2[LEN_DRX_TUNE2];
-	uint8_t drxtune4H[LEN_DRX_TUNE4H];
-	uint8_t ldecfg1[LEN_LDE_CFG1];
-	uint8_t ldecfg2[LEN_LDE_CFG2];
-	uint8_t lderepc[LEN_LDE_REPC];
-	uint8_t txpower[LEN_TX_POWER];
-	uint8_t rfrxctrlh[LEN_RF_RXCTRLH];
-	uint8_t rftxctrl[LEN_RF_TXCTRL];
-	uint8_t tcpgdelay[LEN_TC_PGDELAY];
-	uint8_t fspllcfg[LEN_FS_PLLCFG];
-	uint8_t fsplltune[LEN_FS_PLLTUNE];
-	// uint8_t fsxtalt[LEN_FS_XTALT];
+	unsigned char agctune1[AGC_TUNE1_LEN];
+	unsigned char agctune2[AGC_TUNE2_LEN];
+	unsigned char agctune3[AGC_TUNE3_LEN];
+	unsigned char drxtune0b[DRX_TUNE0b_LEN];
+	unsigned char drxtune1a[DRX_TUNE1a_LEN];
+	unsigned char drxtune1b[DRX_TUNE1b_LEN];
+	unsigned char drxtune2[DRX_TUNE2_LEN];
+	unsigned char drxtune4H[DRX_TUNE4H_LEN];
+	unsigned char ldecfg1[LDE_CFG1_LEN];
+	unsigned char ldecfg2[LDE_CFG2_LEN];
+	unsigned char lderepc[LDE_REPC_LEN];
+	unsigned char txpower[TX_POWER_LEN];
+	unsigned char rfrxctrlh[RF_RXCTRLH_LEN];
+	unsigned char rftxctrl[RF_TXCTRL_LEN];
+	unsigned char tcpgdelay[TC_PGDELAY_LEN];
+	unsigned char fspllcfg[FS_PLLCFG_LEN];
+	unsigned char fsplltune[FS_PLLTUNE_LEN];
+
 	// AGC_TUNE1
 	if(dev->pulseFrequency == TX_PULSE_FREQ_16MHZ) {
-		writeValueToBytes(agctune1, 0x8870, LEN_AGC_TUNE1);
+		writeValueToBytes(agctune1, 0x8870, AGC_TUNE1_LEN);
 	} else if(dev->pulseFrequency == TX_PULSE_FREQ_64MHZ) {
-		writeValueToBytes(agctune1, 0x889B, LEN_AGC_TUNE1);
+		writeValueToBytes(agctune1, 0x889B, AGC_TUNE1_LEN);
 	} else {
 		// TODO proper error/warning handling
 	}
 	// AGC_TUNE2
-	writeValueToBytes(agctune2, 0x2502A907L, LEN_AGC_TUNE2);
+	writeValueToBytes(agctune2, 0x2502A907L, AGC_TUNE2_LEN);
 	// AGC_TUNE3
-	writeValueToBytes(agctune3, 0x0035, LEN_AGC_TUNE3);
+	writeValueToBytes(agctune3, 0x0035, AGC_TUNE3_LEN);
 	// DRX_TUNE0b (already optimized according to Table 20 of user manual)
 	if(dev->dataRate == TRX_RATE_110KBPS) {
-		writeValueToBytes(drxtune0b, 0x0016, LEN_DRX_TUNE0b);
+		writeValueToBytes(drxtune0b, 0x0016, DRX_TUNE0b_LEN);
 	} else if(dev->dataRate == TRX_RATE_850KBPS) {
-		writeValueToBytes(drxtune0b, 0x0006, LEN_DRX_TUNE0b);
+		writeValueToBytes(drxtune0b, 0x0006, DRX_TUNE0b_LEN);
 	} else if(dev->dataRate == TRX_RATE_6800KBPS) {
-		writeValueToBytes(drxtune0b, 0x0001, LEN_DRX_TUNE0b);
+		writeValueToBytes(drxtune0b, 0x0001, DRX_TUNE0b_LEN);
 	} else {
 		// TODO proper error/warning handling
 	}
 	// DRX_TUNE1a
 	if(dev->pulseFrequency == TX_PULSE_FREQ_16MHZ) {
-		writeValueToBytes(drxtune1a, 0x0087, LEN_DRX_TUNE1a);
+		writeValueToBytes(drxtune1a, 0x0087, DRX_TUNE1a_LEN);
 	} else if(dev->pulseFrequency == TX_PULSE_FREQ_64MHZ) {
-		writeValueToBytes(drxtune1a, 0x008D, LEN_DRX_TUNE1a);
+		writeValueToBytes(drxtune1a, 0x008D, DRX_TUNE1a_LEN);
 	} else {
 		// TODO proper error/warning handling
 	}
@@ -586,19 +593,19 @@ static void DW_Tune(DwDevice_st *dev) {
 	if(dev->preambleLength ==  TX_PREAMBLE_LEN_1536 || dev->preambleLength ==  TX_PREAMBLE_LEN_2048 ||
 			dev->preambleLength ==  TX_PREAMBLE_LEN_4096) {
 		if(dev->dataRate == TRX_RATE_110KBPS) {
-			writeValueToBytes(drxtune1b, 0x0064, LEN_DRX_TUNE1b);
+			writeValueToBytes(drxtune1b, 0x0064, DRX_TUNE1b_LEN);
 		} else {
 			// TODO proper error/warning handling
 		}
 	} else if(dev->preambleLength != TX_PREAMBLE_LEN_64) {
 		if(dev->dataRate == TRX_RATE_850KBPS || dev->dataRate == TRX_RATE_6800KBPS) {
-			writeValueToBytes(drxtune1b, 0x0020, LEN_DRX_TUNE1b);
+			writeValueToBytes(drxtune1b, 0x0020, DRX_TUNE1b_LEN);
 		} else {
 			// TODO proper error/warning handling
 		}
 	} else {
 		if(dev->dataRate == TRX_RATE_6800KBPS) {
-			writeValueToBytes(drxtune1b, 0x0010, LEN_DRX_TUNE1b);
+			writeValueToBytes(drxtune1b, 0x0010, DRX_TUNE1b_LEN);
 		} else {
 			// TODO proper error/warning handling
 		}
@@ -606,33 +613,33 @@ static void DW_Tune(DwDevice_st *dev) {
 	// DRX_TUNE2
 	if(dev->pacSize == PAC_SIZE_8) {
 		if(dev->pulseFrequency == TX_PULSE_FREQ_16MHZ) {
-			writeValueToBytes(drxtune2, 0x311A002DL, LEN_DRX_TUNE2);
+			writeValueToBytes(drxtune2, 0x311A002DL, DRX_TUNE2_LEN);
 		} else if(dev->pulseFrequency == TX_PULSE_FREQ_64MHZ) {
-			writeValueToBytes(drxtune2, 0x313B006BL, LEN_DRX_TUNE2);
+			writeValueToBytes(drxtune2, 0x313B006BL, DRX_TUNE2_LEN);
 		} else {
 			// TODO proper error/warning handling
 		}
 	} else if(dev->pacSize == PAC_SIZE_16) {
 		if(dev->pulseFrequency == TX_PULSE_FREQ_16MHZ) {
-			writeValueToBytes(drxtune2, 0x331A0052L, LEN_DRX_TUNE2);
+			writeValueToBytes(drxtune2, 0x331A0052L, DRX_TUNE2_LEN);
 		} else if(dev->pulseFrequency == TX_PULSE_FREQ_64MHZ) {
-			writeValueToBytes(drxtune2, 0x333B00BEL, LEN_DRX_TUNE2);
+			writeValueToBytes(drxtune2, 0x333B00BEL, DRX_TUNE2_LEN);
 		} else {
 			// TODO proper error/warning handling
 		}
 	} else if(dev->pacSize == PAC_SIZE_32) {
 		if(dev->pulseFrequency == TX_PULSE_FREQ_16MHZ) {
-			writeValueToBytes(drxtune2, 0x351A009AL, LEN_DRX_TUNE2);
+			writeValueToBytes(drxtune2, 0x351A009AL, DRX_TUNE2_LEN);
 		} else if(dev->pulseFrequency == TX_PULSE_FREQ_64MHZ) {
-			writeValueToBytes(drxtune2, 0x353B015EL, LEN_DRX_TUNE2);
+			writeValueToBytes(drxtune2, 0x353B015EL, DRX_TUNE2_LEN);
 		} else {
 			// TODO proper error/warning handling
 		}
 	} else if(dev->pacSize == PAC_SIZE_64) {
 		if(dev->pulseFrequency == TX_PULSE_FREQ_16MHZ) {
-			writeValueToBytes(drxtune2, 0x371A011DL, LEN_DRX_TUNE2);
+			writeValueToBytes(drxtune2, 0x371A011DL, DRX_TUNE2_LEN);
 		} else if(dev->pulseFrequency == TX_PULSE_FREQ_64MHZ) {
-			writeValueToBytes(drxtune2, 0x373B0296L, LEN_DRX_TUNE2);
+			writeValueToBytes(drxtune2, 0x373B0296L, DRX_TUNE2_LEN);
 		} else {
 			// TODO proper error/warning handling
 		}
@@ -641,146 +648,146 @@ static void DW_Tune(DwDevice_st *dev) {
 	}
 	// DRX_TUNE4H
 	if(dev->preambleLength == TX_PREAMBLE_LEN_64) {
-		writeValueToBytes(drxtune4H, 0x0010, LEN_DRX_TUNE4H);
+		writeValueToBytes(drxtune4H, 0x0010, DRX_TUNE4H_LEN);
 	} else {
-		writeValueToBytes(drxtune4H, 0x0028, LEN_DRX_TUNE4H);
+		writeValueToBytes(drxtune4H, 0x0028, DRX_TUNE4H_LEN);
 	}
 	// RF_RXCTRLH
 	if(dev->channel != CHANNEL_4 && dev->channel != CHANNEL_7) {
-		writeValueToBytes(rfrxctrlh, 0xD8, LEN_RF_RXCTRLH);
+		writeValueToBytes(rfrxctrlh, 0xD8, RF_RXCTRLH_LEN);
 	} else {
-		writeValueToBytes(rfrxctrlh, 0xBC, LEN_RF_RXCTRLH);
+		writeValueToBytes(rfrxctrlh, 0xBC, RF_RXCTRLH_LEN);
 	}
-	// RX_TXCTRL
+	// RF_TXCTRL
 	if(dev->channel == CHANNEL_1) {
-		writeValueToBytes(rftxctrl, 0x00005C40L, LEN_RF_TXCTRL);
+		writeValueToBytes(rftxctrl, 0x00005C40L, RF_TXCTRL_LEN);
 	} else if(dev->channel == CHANNEL_2) {
-		writeValueToBytes(rftxctrl, 0x00045CA0L, LEN_RF_TXCTRL);
+		writeValueToBytes(rftxctrl, 0x00045CA0L, RF_TXCTRL_LEN);
 	} else if(dev->channel == CHANNEL_3) {
-		writeValueToBytes(rftxctrl, 0x00086CC0L, LEN_RF_TXCTRL);
+		writeValueToBytes(rftxctrl, 0x00086CC0L, RF_TXCTRL_LEN);
 	} else if(dev->channel == CHANNEL_4) {
-		writeValueToBytes(rftxctrl, 0x00045C80L, LEN_RF_TXCTRL);
+		writeValueToBytes(rftxctrl, 0x00045C80L, RF_TXCTRL_LEN);
 	} else if(dev->channel == CHANNEL_5) {
-		writeValueToBytes(rftxctrl, 0x001E3FE0L, LEN_RF_TXCTRL);
+		writeValueToBytes(rftxctrl, 0x001E3FE0L, RF_TXCTRL_LEN);
 	} else if(dev->channel == CHANNEL_7) {
-		writeValueToBytes(rftxctrl, 0x001E7DE0L, LEN_RF_TXCTRL);
+		writeValueToBytes(rftxctrl, 0x001E7DE0L, RF_TXCTRL_LEN);
 	} else {
 		// TODO proper error/warning handling
 	}
 	// TC_PGDELAY
 	if(dev->channel == CHANNEL_1) {
-		writeValueToBytes(tcpgdelay, 0xC9, LEN_TC_PGDELAY);
+		writeValueToBytes(tcpgdelay, 0xC9, TC_PGDELAY_LEN);
 	} else if(dev->channel == CHANNEL_2) {
-		writeValueToBytes(tcpgdelay, 0xC2, LEN_TC_PGDELAY);
+		writeValueToBytes(tcpgdelay, 0xC2, TC_PGDELAY_LEN);
 	} else if(dev->channel == CHANNEL_3) {
-		writeValueToBytes(tcpgdelay, 0xC5, LEN_TC_PGDELAY);
+		writeValueToBytes(tcpgdelay, 0xC5, TC_PGDELAY_LEN);
 	} else if(dev->channel == CHANNEL_4) {
-		writeValueToBytes(tcpgdelay, 0x95, LEN_TC_PGDELAY);
+		writeValueToBytes(tcpgdelay, 0x95, TC_PGDELAY_LEN);
 	} else if(dev->channel == CHANNEL_5) {
-		writeValueToBytes(tcpgdelay, 0xC0, LEN_TC_PGDELAY);
+		writeValueToBytes(tcpgdelay, 0xC0, TC_PGDELAY_LEN);
 	} else if(dev->channel == CHANNEL_7) {
-		writeValueToBytes(tcpgdelay, 0x93, LEN_TC_PGDELAY);
+		writeValueToBytes(tcpgdelay, 0x93, TC_PGDELAY_LEN);
 	} else {
 		// TODO proper error/warning handling
 	}
 	// FS_PLLCFG and FS_PLLTUNE
 	if(dev->channel == CHANNEL_1) {
-		writeValueToBytes(fspllcfg, 0x09000407L, LEN_FS_PLLCFG);
-		writeValueToBytes(fsplltune, 0x1E, LEN_FS_PLLTUNE);
+		writeValueToBytes(fspllcfg, 0x09000407L, FS_PLLCFG_LEN);
+		writeValueToBytes(fsplltune, 0x1E, FS_PLLTUNE_LEN);
 	} else if(dev->channel == CHANNEL_2 || dev->channel == CHANNEL_4) {
-		writeValueToBytes(fspllcfg, 0x08400508L, LEN_FS_PLLCFG);
-		writeValueToBytes(fsplltune, 0x26, LEN_FS_PLLTUNE);
+		writeValueToBytes(fspllcfg, 0x08400508L, FS_PLLCFG_LEN);
+		writeValueToBytes(fsplltune, 0x26, FS_PLLTUNE_LEN);
 	} else if(dev->channel == CHANNEL_3) {
-		writeValueToBytes(fspllcfg, 0x08401009L, LEN_FS_PLLCFG);
-		writeValueToBytes(fsplltune, 0x5E, LEN_FS_PLLTUNE);
+		writeValueToBytes(fspllcfg, 0x08401009L, FS_PLLCFG_LEN);
+		writeValueToBytes(fsplltune, 0x56, FS_PLLTUNE_LEN);
 	} else if(dev->channel == CHANNEL_5 || dev->channel == CHANNEL_7) {
-		writeValueToBytes(fspllcfg, 0x0800041DL, LEN_FS_PLLCFG);
-		writeValueToBytes(fsplltune, 0xA6, LEN_FS_PLLTUNE);
+		writeValueToBytes(fspllcfg, 0x0800041DL, FS_PLLCFG_LEN);
+		writeValueToBytes(fsplltune, 0xBE, FS_PLLTUNE_LEN);
 	} else {
 		// TODO proper error/warning handling
 	}
 	// LDE_CFG1
-	writeValueToBytes(ldecfg1, 0xD, LEN_LDE_CFG1);
+	writeValueToBytes(ldecfg1, 0xD, LDE_CFG1_LEN);
 	// LDE_CFG2
 	if(dev->pulseFrequency == TX_PULSE_FREQ_16MHZ) {
-		writeValueToBytes(ldecfg2, 0x1607, LEN_LDE_CFG2);
+		writeValueToBytes(ldecfg2, 0x1607, LDE_CFG2_LEN);
 	} else if(dev->pulseFrequency == TX_PULSE_FREQ_64MHZ) {
-		writeValueToBytes(ldecfg2, 0x0607, LEN_LDE_CFG2);
+		writeValueToBytes(ldecfg2, 0x0607, LDE_CFG2_LEN);
 	} else {
 		// TODO proper error/warning handling
 	}
 	// LDE_REPC
 	if(dev->preambleCode == PREAMBLE_CODE_16MHZ_1 || dev->preambleCode == PREAMBLE_CODE_16MHZ_2) {
 		if(dev->dataRate == TRX_RATE_110KBPS) {
-			writeValueToBytes(lderepc, ((0x5998 >> 3) & 0xFFFF), LEN_LDE_REPC);
+			writeValueToBytes(lderepc, ((0x5998 >> 3) & 0xFFFF), LDE_REPC_LEN);
 		} else {
-			writeValueToBytes(lderepc, 0x5998, LEN_LDE_REPC);
+			writeValueToBytes(lderepc, 0x5998, LDE_REPC_LEN);
 		}
 	} else if(dev->preambleCode == PREAMBLE_CODE_16MHZ_3 || dev->preambleCode == PREAMBLE_CODE_16MHZ_8) {
 		if(dev->dataRate == TRX_RATE_110KBPS) {
-			writeValueToBytes(lderepc, ((0x51EA >> 3) & 0xFFFF), LEN_LDE_REPC);
+			writeValueToBytes(lderepc, ((0x51EA >> 3) & 0xFFFF), LDE_REPC_LEN);
 		} else {
-			writeValueToBytes(lderepc, 0x51EA, LEN_LDE_REPC);
+			writeValueToBytes(lderepc, 0x51EA, LDE_REPC_LEN);
 		}
 	} else if(dev->preambleCode == PREAMBLE_CODE_16MHZ_4) {
 		if(dev->dataRate == TRX_RATE_110KBPS) {
-			writeValueToBytes(lderepc, ((0x428E >> 3) & 0xFFFF), LEN_LDE_REPC);
+			writeValueToBytes(lderepc, ((0x428E >> 3) & 0xFFFF), LDE_REPC_LEN);
 		} else {
-			writeValueToBytes(lderepc, 0x428E, LEN_LDE_REPC);
+			writeValueToBytes(lderepc, 0x428E, LDE_REPC_LEN);
 		}
 	} else if(dev->preambleCode == PREAMBLE_CODE_16MHZ_5) {
 		if(dev->dataRate == TRX_RATE_110KBPS) {
-			writeValueToBytes(lderepc, ((0x451E >> 3) & 0xFFFF), LEN_LDE_REPC);
+			writeValueToBytes(lderepc, ((0x451E >> 3) & 0xFFFF), LDE_REPC_LEN);
 		} else {
-			writeValueToBytes(lderepc, 0x451E, LEN_LDE_REPC);
+			writeValueToBytes(lderepc, 0x451E, LDE_REPC_LEN);
 		}
 	} else if(dev->preambleCode == PREAMBLE_CODE_16MHZ_6) {
 		if(dev->dataRate == TRX_RATE_110KBPS) {
-			writeValueToBytes(lderepc, ((0x2E14 >> 3) & 0xFFFF), LEN_LDE_REPC);
+			writeValueToBytes(lderepc, ((0x2E14 >> 3) & 0xFFFF), LDE_REPC_LEN);
 		} else {
-			writeValueToBytes(lderepc, 0x2E14, LEN_LDE_REPC);
+			writeValueToBytes(lderepc, 0x2E14, LDE_REPC_LEN);
 		}
 	} else if(dev->preambleCode == PREAMBLE_CODE_16MHZ_7) {
 		if(dev->dataRate == TRX_RATE_110KBPS) {
-			writeValueToBytes(lderepc, ((0x8000 >> 3) & 0xFFFF), LEN_LDE_REPC);
+			writeValueToBytes(lderepc, ((0x8000 >> 3) & 0xFFFF), LDE_REPC_LEN);
 		} else {
-			writeValueToBytes(lderepc, 0x8000, LEN_LDE_REPC);
+			writeValueToBytes(lderepc, 0x8000, LDE_REPC_LEN);
 		}
 	} else if(dev->preambleCode == PREAMBLE_CODE_64MHZ_9) {
 		if(dev->dataRate == TRX_RATE_110KBPS) {
-			writeValueToBytes(lderepc, ((0x28F4 >> 3) & 0xFFFF), LEN_LDE_REPC);
+			writeValueToBytes(lderepc, ((0x28F4 >> 3) & 0xFFFF), LDE_REPC_LEN);
 		} else {
-			writeValueToBytes(lderepc, 0x28F4, LEN_LDE_REPC);
+			writeValueToBytes(lderepc, 0x28F4, LDE_REPC_LEN);
 		}
 	} else if(dev->preambleCode == PREAMBLE_CODE_64MHZ_10 || dev->preambleCode == PREAMBLE_CODE_64MHZ_17) {
 		if(dev->dataRate == TRX_RATE_110KBPS) {
-			writeValueToBytes(lderepc, ((0x3332 >> 3) & 0xFFFF), LEN_LDE_REPC);
+			writeValueToBytes(lderepc, ((0x3332 >> 3) & 0xFFFF), LDE_REPC_LEN);
 		} else {
-			writeValueToBytes(lderepc, 0x3332, LEN_LDE_REPC);
+			writeValueToBytes(lderepc, 0x3332, LDE_REPC_LEN);
 		}
 	} else if(dev->preambleCode == PREAMBLE_CODE_64MHZ_11) {
 		if(dev->dataRate == TRX_RATE_110KBPS) {
-			writeValueToBytes(lderepc, ((0x3AE0 >> 3) & 0xFFFF), LEN_LDE_REPC);
+			writeValueToBytes(lderepc, ((0x3AE0 >> 3) & 0xFFFF), LDE_REPC_LEN);
 		} else {
-			writeValueToBytes(lderepc, 0x3AE0, LEN_LDE_REPC);
+			writeValueToBytes(lderepc, 0x3AE0, LDE_REPC_LEN);
 		}
 	} else if(dev->preambleCode == PREAMBLE_CODE_64MHZ_12) {
 		if(dev->dataRate == TRX_RATE_110KBPS) {
-			writeValueToBytes(lderepc, ((0x3D70 >> 3) & 0xFFFF), LEN_LDE_REPC);
+			writeValueToBytes(lderepc, ((0x3D70 >> 3) & 0xFFFF), LDE_REPC_LEN);
 		} else {
-			writeValueToBytes(lderepc, 0x3D70, LEN_LDE_REPC);
+			writeValueToBytes(lderepc, 0x3D70, LDE_REPC_LEN);
 		}
 	} else if(dev->preambleCode == PREAMBLE_CODE_64MHZ_18 || dev->preambleCode == PREAMBLE_CODE_64MHZ_19) {
 		if(dev->dataRate == TRX_RATE_110KBPS) {
-			writeValueToBytes(lderepc, ((0x35C2 >> 3) & 0xFFFF), LEN_LDE_REPC);
+			writeValueToBytes(lderepc, ((0x35C2 >> 3) & 0xFFFF), LDE_REPC_LEN);
 		} else {
-			writeValueToBytes(lderepc, 0x35C2, LEN_LDE_REPC);
+			writeValueToBytes(lderepc, 0x35C2, LDE_REPC_LEN);
 		}
 	} else if(dev->preambleCode == PREAMBLE_CODE_64MHZ_20) {
 		if(dev->dataRate == TRX_RATE_110KBPS) {
-			writeValueToBytes(lderepc, ((0x47AE >> 3) & 0xFFFF), LEN_LDE_REPC);
+			writeValueToBytes(lderepc, ((0x47AE >> 3) & 0xFFFF), LDE_REPC_LEN);
 		} else {
-			writeValueToBytes(lderepc, 0x47AE, LEN_LDE_REPC);
+			writeValueToBytes(lderepc, 0x47AE, LDE_REPC_LEN);
 		}
 	} else {
 		// TODO proper error/warning handling
@@ -789,15 +796,15 @@ static void DW_Tune(DwDevice_st *dev) {
 	if(dev->channel == CHANNEL_1 || dev->channel == CHANNEL_2) {
 		if(dev->pulseFrequency == TX_PULSE_FREQ_16MHZ) {
 			if(dev->smartPower) {
-				writeValueToBytes(txpower, 0x15355575L, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x15355575L, TX_POWER_LEN);
 			} else {
-				writeValueToBytes(txpower, 0x75757575L, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x75757575L, TX_POWER_LEN);
 			}
 		} else if(dev->pulseFrequency == TX_PULSE_FREQ_64MHZ) {
 			if(dev->smartPower) {
-				writeValueToBytes(txpower, 0x07274767L, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x07274767L, TX_POWER_LEN);
 			} else {
-				writeValueToBytes(txpower, 0x67676767L, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x67676767L, TX_POWER_LEN);
 			}
 		} else {
 			// TODO proper error/warning handling
@@ -805,15 +812,15 @@ static void DW_Tune(DwDevice_st *dev) {
 	} else if(dev->channel == CHANNEL_3) {
 		if(dev->pulseFrequency == TX_PULSE_FREQ_16MHZ) {
 			if(dev->smartPower) {
-				writeValueToBytes(txpower, 0x0F2F4F6FL, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x0F2F4F6FL, TX_POWER_LEN);
 			} else {
-				writeValueToBytes(txpower, 0x6F6F6F6FL, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x6F6F6F6FL, TX_POWER_LEN);
 			}
 		} else if(dev->pulseFrequency == TX_PULSE_FREQ_64MHZ) {
 			if(dev->smartPower) {
-				writeValueToBytes(txpower, 0x2B4B6B8BL, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x2B4B6B8BL, TX_POWER_LEN);
 			} else {
-				writeValueToBytes(txpower, 0x8B8B8B8BL, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x8B8B8B8BL, TX_POWER_LEN);
 			}
 		} else {
 			// TODO proper error/warning handling
@@ -821,15 +828,15 @@ static void DW_Tune(DwDevice_st *dev) {
 	} else if(dev->channel == CHANNEL_4) {
 		if(dev->pulseFrequency == TX_PULSE_FREQ_16MHZ) {
 			if(dev->smartPower) {
-				writeValueToBytes(txpower, 0x1F1F3F5FL, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x1F1F3F5FL, TX_POWER_LEN);
 			} else {
-				writeValueToBytes(txpower, 0x5F5F5F5FL, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x5F5F5F5FL, TX_POWER_LEN);
 			}
 		} else if(dev->pulseFrequency == TX_PULSE_FREQ_64MHZ) {
 			if(dev->smartPower) {
-				writeValueToBytes(txpower, 0x3A5A7A9AL, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x3A5A7A9AL, TX_POWER_LEN);
 			} else {
-				writeValueToBytes(txpower, 0x9A9A9A9AL, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x9A9A9A9AL, TX_POWER_LEN);
 			}
 		} else {
 			// TODO proper error/warning handling
@@ -837,15 +844,15 @@ static void DW_Tune(DwDevice_st *dev) {
 	} else if(dev->channel == CHANNEL_5) {
 		if(dev->pulseFrequency == TX_PULSE_FREQ_16MHZ) {
 			if(dev->smartPower) {
-				writeValueToBytes(txpower, 0x0E082848L, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x0E082848L, TX_POWER_LEN);
 			} else {
-				writeValueToBytes(txpower, 0x48484848L, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x48484848L, TX_POWER_LEN);
 			}
 		} else if(dev->pulseFrequency == TX_PULSE_FREQ_64MHZ) {
 			if(dev->smartPower) {
-				writeValueToBytes(txpower, 0x25456585L, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x25456585L, TX_POWER_LEN);
 			} else {
-				writeValueToBytes(txpower, 0x85858585L, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x85858585L, TX_POWER_LEN);
 			}
 		} else {
 			// TODO proper error/warning handling
@@ -853,15 +860,15 @@ static void DW_Tune(DwDevice_st *dev) {
 	} else if(dev->channel == CHANNEL_7) {
 		if(dev->pulseFrequency == TX_PULSE_FREQ_16MHZ) {
 			if(dev->smartPower) {
-				writeValueToBytes(txpower, 0x32527292L, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x32527292L, TX_POWER_LEN);
 			} else {
-				writeValueToBytes(txpower, 0x92929292L, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x92929292L, TX_POWER_LEN);
 			}
 		} else if(dev->pulseFrequency == TX_PULSE_FREQ_64MHZ) {
 			if(dev->smartPower) {
-				writeValueToBytes(txpower, 0x5171B1D1L, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0x5171B1D1L, TX_POWER_LEN);
 			} else {
-				writeValueToBytes(txpower, 0xD1D1D1D1L, LEN_TX_POWER);
+				writeValueToBytes(txpower, 0xD1D1D1D1L, TX_POWER_LEN);
 			}
 		} else {
 			// TODO proper error/warning handling
@@ -869,27 +876,25 @@ static void DW_Tune(DwDevice_st *dev) {
 	} else {
 		// TODO proper error/warning handling
 	}
-	// mid range XTAL trim (TODO here we assume no calibration data available in OTP)
-	//writeValueToBytes(fsxtalt, 0x60, LEN_FS_XTALT);
+
 	// write configuration back to chip
-	dwSpiWrite(dev, AGC_TUNE, AGC_TUNE1_SUB, agctune1, LEN_AGC_TUNE1);
-	dwSpiWrite(dev, AGC_TUNE, AGC_TUNE2_SUB, agctune2, LEN_AGC_TUNE2);
-	dwSpiWrite(dev, AGC_TUNE, AGC_TUNE3_SUB, agctune3, LEN_AGC_TUNE3);
-	dwSpiWrite(dev, DRX_TUNE, DRX_TUNE0b_SUB, drxtune0b, LEN_DRX_TUNE0b);
-	dwSpiWrite(dev, DRX_TUNE, DRX_TUNE1a_SUB, drxtune1a, LEN_DRX_TUNE1a);
-	dwSpiWrite(dev, DRX_TUNE, DRX_TUNE1b_SUB, drxtune1b, LEN_DRX_TUNE1b);
-	dwSpiWrite(dev, DRX_TUNE, DRX_TUNE2_SUB, drxtune2, LEN_DRX_TUNE2);
-	dwSpiWrite(dev, DRX_TUNE, DRX_TUNE4H_SUB, drxtune4H, LEN_DRX_TUNE4H);
-	dwSpiWrite(dev, LDE_IF, LDE_CFG1_SUB, ldecfg1, LEN_LDE_CFG1);
-	dwSpiWrite(dev, LDE_IF, LDE_CFG2_SUB, ldecfg2, LEN_LDE_CFG2);
-	dwSpiWrite(dev, LDE_IF, LDE_REPC_SUB, lderepc, LEN_LDE_REPC);
-	dwSpiWrite(dev, TX_POWER, NO_SUB, txpower, LEN_TX_POWER);
-	dwSpiWrite(dev, RF_CONF, RF_RXCTRLH_SUB, rfrxctrlh, LEN_RF_RXCTRLH);
-	dwSpiWrite(dev, RF_CONF, RF_TXCTRL_SUB, rftxctrl, LEN_RF_TXCTRL);
-	dwSpiWrite(dev, TX_CAL, TC_PGDELAY_SUB, tcpgdelay, LEN_TC_PGDELAY);
-	dwSpiWrite(dev, FS_CTRL, FS_PLLTUNE_SUB, fsplltune, LEN_FS_PLLTUNE);
-	dwSpiWrite(dev, FS_CTRL, FS_PLLCFG_SUB, fspllcfg, LEN_FS_PLLCFG);
-	//dwSpiWrite(dev, FS_CTRL, FS_XTALT_SUB, fsxtalt, LEN_FS_XTALT);
+	dev->ops->spiWrite(dev, AGC_CTRL_ID, AGC_TUNE1_OFFSET, agctune1, AGC_TUNE1_LEN);
+	dev->ops->spiWrite(dev, AGC_CTRL_ID, AGC_TUNE2_OFFSET, agctune2, AGC_TUNE2_LEN);
+	dev->ops->spiWrite(dev, AGC_CTRL_ID, AGC_TUNE3_OFFSET, agctune3, AGC_TUNE3_LEN);
+	dev->ops->spiWrite(dev, DRX_CONF_ID, DRX_TUNE0b_OFFSET, drxtune0b, DRX_TUNE0b_LEN);
+	dev->ops->spiWrite(dev, DRX_CONF_ID, DRX_TUNE1a_OFFSET, drxtune1a, DRX_TUNE1a_LEN);
+	dev->ops->spiWrite(dev, DRX_CONF_ID, DRX_TUNE1b_OFFSET, drxtune1b, DRX_TUNE1b_LEN);
+	dev->ops->spiWrite(dev, DRX_CONF_ID, DRX_TUNE2_OFFSET, drxtune2, DRX_TUNE2_LEN);
+	dev->ops->spiWrite(dev, DRX_CONF_ID, DRX_TUNE4H_OFFSET, drxtune4H, DRX_TUNE4H_LEN);
+	dev->ops->spiWrite(dev, LDE_IF_ID, LDE_CFG1_OFFSET, ldecfg1, LDE_CFG1_LEN);
+	dev->ops->spiWrite(dev, LDE_IF_ID, LDE_CFG2_OFFSET, ldecfg2, LDE_CFG2_LEN);
+	dev->ops->spiWrite(dev, LDE_IF_ID, LDE_REPC_OFFSET, lderepc, LDE_REPC_LEN);
+	dev->ops->spiWrite(dev, TX_POWER_ID, TX_POWER_OFFSET, txpower, TX_POWER_LEN);
+	dev->ops->spiWrite(dev, RF_CONF_ID, RF_RXCTRLH_OFFSET, rfrxctrlh, RF_RXCTRLH_LEN);
+	dev->ops->spiWrite(dev, RF_CONF_ID, RF_TXCTRL_OFFSET, rftxctrl, RF_TXCTRL_LEN);
+	dev->ops->spiWrite(dev, TX_CAL_ID, TC_PGDELAY_OFFSET, tcpgdelay, TC_PGDELAY_LEN);
+	dev->ops->spiWrite(dev, FS_CTRL_ID, FS_PLLTUNE_OFFSET, fsplltune, FS_PLLTUNE_LEN);
+	dev->ops->spiWrite(dev, FS_CTRL_ID, FS_PLLCFG_OFFSET, fspllcfg, FS_PLLCFG_LEN);
 }
 static void DW_CommitConfiguration(DwDevice_st* dev) {
 	// write all configurations back to device
@@ -906,9 +911,9 @@ static void DW_CommitConfiguration(DwDevice_st* dev) {
 	// writeValueToBytes(antennaDelayBytes, 16384, LEN_STAMP);
 	// dev->antennaDelay.setTimestamp(antennaDelayBytes);
 	// dwSpiRead(dev, TX_ANTD, NO_SUB, antennaDelayBytes, LEN_TX_ANTD);
-  // dwSpiRead(dev, LDE_IF, LDE_RXANTD_SUB, antennaDelayBytes, LEN_LDE_RXANTD);
-  dwSpiWrite(dev, TX_ANTD, NO_SUB, dev->antennaDelay.raw, LEN_TX_ANTD);
-  dwSpiWrite(dev, LDE_IF, LDE_RXANTD_SUB, dev->antennaDelay.raw, LEN_LDE_RXANTD);
+    // dwSpiRead(dev, LDE_IF, LDE_RXANTD_SUB, antennaDelayBytes, LEN_LDE_RXANTD);
+    dev->ops->spiWrite(dev, TX_ANTD_ID, TX_ANTD_OFFSET, dev->antennaDelay.raw, TX_ANTD_LEN);
+    dev->ops->spiWrite(dev, LDE_IF_ID, LDE_RXANTD_OFFSET, dev->antennaDelay.raw, LDE_RXANTD_LEN);
 }
 
 static void DW_SetDefaults(DwDevice_st* dev) {
@@ -1140,8 +1145,7 @@ HAL_StatusTypeDef DW_Init(void)
     DW_SetChannel(&dw_devcie, CHANNEL_2);
     DW_UseSmartPower(&dw_devcie, true);
     DW_SetPreambleCode(&dw_devcie, PREAMBLE_CODE_64MHZ_9);
-
-    
+    DW_CommitConfiguration(&dw_devcie);
 
     return hal_status;
 }
