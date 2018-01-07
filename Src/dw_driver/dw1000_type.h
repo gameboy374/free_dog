@@ -4,12 +4,15 @@
 #include "dw1000_regs.h"
 #include <stdbool.h>
 
+struct DwDevice_s;
+
 typedef enum{
     dwClockAuto = 0x00,
     dwClockXti = 0x01,
     dwClockPll = 0x02
 }dwClock_t;
 
+#pragma anon_unions
 typedef union dwTime_u {
   uint8_t raw[5];
   uint64_t full;
@@ -23,8 +26,10 @@ typedef union dwTime_u {
   } __attribute__((packed));
 } dwTime_t;
 
+typedef void (*dwHandler_t)(struct DwDevice_s *dev);
+
 struct dwOps_s;
-typedef struct {
+typedef struct DwDevice_s{
   struct dwOps_s *ops;
   SPI_HandleTypeDef *handle;
   //state
@@ -38,6 +43,7 @@ typedef struct {
   unsigned int sysmask;             //4byte
   unsigned int chanctrl;            //4byte
   unsigned char txfctrl[TX_FCTRL_LEN];
+  unsigned char sysstatus[SYS_STATUS_LEN];
   //
   unsigned char extendedFrameLength;
   unsigned char dataRate;
@@ -48,6 +54,8 @@ typedef struct {
   unsigned char channel;
   bool smartPower;
   bool frameCheck;
+  bool wait4resp;
+  bool permanentReceive;
   //other config
   dwTime_t antennaDelay;
   //RTX
@@ -55,9 +63,13 @@ typedef struct {
   unsigned short rxBufLens;
   unsigned char *pTxBuf;
   unsigned char *pRxBuf;
-} __attribute__((aligned)) DwDevice_st;
 
-typedef void (*dwHandler_t)(struct DwDevice_st *dev);
+  // Callback handles
+  dwHandler_t handleSent;
+  dwHandler_t handleReceived;
+  dwHandler_t handleReceiveTimeout;
+  dwHandler_t handleReceiveFailed;
+} __attribute__((aligned)) DwDevice_st;
 
 typedef struct dwOps_s{
   /**

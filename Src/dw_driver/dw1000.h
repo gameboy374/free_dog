@@ -92,6 +92,24 @@ typedef struct uwbAlgorithm_s {
 #define PREAMBLE_CODE_64MHZ_19 19
 #define PREAMBLE_CODE_64MHZ_20 20
 
+// Speed of radio waves [m/s] * timestamp resolution [~15.65ps] of DW1000
+#define DISTANCE_OF_RADIO       0.0046917639786159f
+#define DISTANCE_OF_RADIO_INV   213.139451293f
+
+#define MAX_TIMEOUT             2000            //unit:ms
+
 HAL_StatusTypeDef DW_Init(void);
+void DW_Idle(DwDevice_st* dev);
+void DW_GetTransmitTimestamp(DwDevice_st* dev, dwTime_t* time);
+void DW_GetReceiveTimestamp(DwDevice_st* dev, dwTime_t* time);
+unsigned int DW_GetDataLength(DwDevice_st* dev);
+void DW_GetData(DwDevice_st* dev, uint8_t data[], unsigned int n);
+void DW_SetData(DwDevice_st* dev, uint8_t data[], unsigned int n);
+void DW_NewReceive(DwDevice_st* dev);
+void DW_StartReceive(DwDevice_st* dev);
+void DW_NewTransmit(DwDevice_st* dev);
+void DW_StartTransmit(DwDevice_st* dev);
+void DW_WaitForResponse(DwDevice_st* dev, bool val);
+void DW_SetDefaults(DwDevice_st* dev);
 
 #endif

@@ -94,6 +94,7 @@ int main(void)
   MX_RTC_Init();
 
   DW_Init();
+  
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */

@@ -1,15 +1,31 @@
 #include "dw1000.h"
 #include "..\board_config.h"
 #include <string.h>
+#include <math.h>
 
 /**************/
 #define     TWR_ANCHOR              0
 #define     TWR_TAG                 1
 #define     CURRENT_TAG             TWR_TAG
 /**************/
+/**** DW1000 interrupt handling *****/
+#define DW_IRQn                    EXTI3_IRQn
+#define DW_IRQ_PORT                GPIOA
+#define DW_IRQ_PIN                 GPIO_PIN_3
+/**** DW1000 TX RX BUF Length *****/
+#define DW_MAX_TXBUF                16
+#define DW_MAX_RXBUF                16
 
-#define DW_MAX_TXBUF              16
-#define DW_MAX_RXBUF              16
+static const uint8_t BIAS_500_16_ZERO = 10;
+static const uint8_t BIAS_500_64_ZERO = 8;
+static const uint8_t BIAS_900_16_ZERO = 7;
+static const uint8_t BIAS_900_64_ZERO = 7;
+// range bias tables (500 MHz in [mm] and 900 MHz in [2mm] - to fit into bytes)
+static const uint8_t BIAS_500_16[] = {198, 187, 179, 163, 143, 127, 109, 84, 59, 31,   0,  36,  65,  84,  97, 106, 110, 112};
+static const uint8_t BIAS_500_64[] = {110, 105, 100,  93,  82,  69,  51, 27,  0, 21,  35,  42,  49,  62,  71,  76,  81,  86};
+static const uint8_t BIAS_900_16[] = {137, 122, 105, 88, 69,  47,  25,  0, 21, 48, 79, 105, 127, 147, 160, 169, 178, 197};
+static const uint8_t BIAS_900_64[] = {147, 133, 117, 99, 75, 50, 29,  0, 24, 45, 63, 76, 87, 98, 116, 122, 132, 142};
+
 // Default Mode of operation
 const unsigned char MODE_LONGDATA_RANGE_LOWPOWER[] = {TRX_RATE_110KBPS, TX_PULSE_FREQ_16MHZ, TX_PREAMBLE_LEN_2048};
 const unsigned char MODE_SHORTDATA_FAST_LOWPOWER[] = {TRX_RATE_6800KBPS, TX_PULSE_FREQ_16MHZ, TX_PREAMBLE_LEN_128};
@@ -18,20 +34,25 @@ const unsigned char MODE_SHORTDATA_FAST_ACCURACY[] = {TRX_RATE_6800KBPS, TX_PULS
 const unsigned char MODE_LONGDATA_FAST_ACCURACY[] = {TRX_RATE_6800KBPS, TX_PULSE_FREQ_64MHZ, TX_PREAMBLE_LEN_1024};
 const unsigned char MODE_LONGDATA_RANGE_ACCURACY[] = {TRX_RATE_110KBPS, TX_PULSE_FREQ_64MHZ, TX_PREAMBLE_LEN_2048};
 
-static unsigned int timeout;
+static uint32_t dw_event_timeout = 0;
+static bool irq_flag = false;
 static unsigned char TX_BUFFER[DW_MAX_TXBUF] = {0};
 static unsigned char RX_BUFFER[DW_MAX_RXBUF] = {0};
 SPI_HandleTypeDef DW_SPI_HANDLE;
 dwOps_t     Ops_t;
 DwDevice_st dw_devcie;
 static uwbConfig_t config_t = {
-    .mdoe = 0,
+    .mode = 0,
     .address = {0,0,0,0,0,0,0xcf,0xbc},
     .anchorListSize = 0,
     .anchors = {0},
     .position = {0.0},
     .positionEnabled = 0,
 };
+
+extern uwbAlgorithm_t uwbTwrAnchorAlgorithm;
+extern uwbAlgorithm_t uwbTwrTagAlgorithm;
+
 struct {
   uwbAlgorithm_t *algorithm;
   char *name;
@@ -167,6 +188,17 @@ static void DW_GPIO_Config(void)
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
+    /*Configure GPIO pin : PA3 */
+    GPIO_InitStruct.Pin = DW_IRQ_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+    GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+    HAL_GPIO_Init(DW_IRQ_PORT, &GPIO_InitStruct);
+}
+
+static void DW_NVIC_Config(void)
+{
+    HAL_NVIC_SetPriority(DW_IRQn, 15, 0);
+    HAL_NVIC_EnableIRQ(DW_IRQn);
 }
 
 static void DW_SPI_Config(void)
@@ -192,6 +224,7 @@ static void DW_SPI_Config(void)
     }
 }
 
+static uint32_t timeout;
 static void txcallback(DwDevice_st *dev)
 {
   timeout = algorithm->onEvent(dev, eventPacketSent);
@@ -429,28 +462,28 @@ static void DW_SetPreambleLength(DwDevice_st* dev, unsigned char prealen) {
 	dev->preambleLength = prealen;
 }
 
-static void DW_SetChannel(DwDevice_st* dev, unsigned char channel) {
-	channel &= 0xF;
-	dev->chanctrl = (unsigned int)((channel | (channel << 4)) & 0xFF);
-	dev->channel = channel;
+static void DW_SetChannel(DwDevice_st* dev, unsigned char ch) {
+	ch &= 0xF;
+	dev->chanctrl = (unsigned int)((ch | (ch << 4)) & 0xFF);
+	dev->channel = ch;
 }
 
 static void DW_SetPreambleCode(DwDevice_st* dev, unsigned char preacode) {
-	preacode &= 0x1F;
-	dev->chanctrl[2] &= 0x3F;
-	dev->chanctrl[2] |= ((preacode << 6) & 0xFF);
-	dev->chanctrl[3] = 0x00;
-	dev->chanctrl[3] = ((((preacode >> 2) & 0x07) | (preacode << 3)) & 0xFF);
+	uint32_t temp_preacode = 0;
+	temp_preacode = (preacode & 0x1F);
+    dev->chanctrl &= ~(CHAN_CTRL_TX_PCOD_MASK + CHAN_CTRL_RX_PCOD_MASK);
+	dev->chanctrl |= ((temp_preacode<<CHAN_CTRL_TX_PCOD_SHIFT)+(temp_preacode<<CHAN_CTRL_RX_PCOD_SHIFT));
 	dev->preambleCode = preacode;
 }
 
-static void DW_Idle(DwDevice_st* dev)
+void DW_Idle(DwDevice_st* dev)
 {
-   memset(dev->sysctrl, 0, SYS_CTRL_LEN);
-   dev->sysctrl[0] |= SYS_CTRL_TRXOFF;
+   memset(&dev->sysctrl, 0, SYS_CTRL_LEN);
+   dev->sysctrl |= SYS_CTRL_TRXOFF;
    dev->deviceMode = IDLE_MODE;
-   dev->ops->spiWrite(dev, SYS_CTRL_ID, SYS_CTRL_OFFSET, dev->sysctrl, SYS_CTRL_LEN);
+   dev->ops->spiWrite(dev, SYS_CTRL_ID, SYS_CTRL_OFFSET, &dev->sysctrl, SYS_CTRL_LEN);
 }
+
 /************************Register Configurate End**************************/
 
 
@@ -469,6 +502,10 @@ static void DW_ReadSystemConfigurationRegister(DwDevice_st* dev) {
 
 static void DW_WriteSystemConfigurationRegister(DwDevice_st* dev) {
     dev->ops->spiWrite(dev, SYS_CFG_ID, SYS_CFG_OFFSET, &dev->syscfg, SYS_CFG_LEN);
+}
+
+static void DW_ReadSystemEventStatusRegister(DwDevice_st* dev) {
+	dev->ops->spiRead(dev, SYS_STATUS_ID, SYS_STATUS_OFFSET, dev->sysstatus, SYS_STATUS_LEN);
 }
 
 static void DW_ReadChannelControlRegister(DwDevice_st* dev) {
@@ -494,8 +531,278 @@ static void DW_ReadSystemEventMaskRegister(DwDevice_st* dev) {
 static void DW_WriteSystemEventMaskRegister(DwDevice_st* dev) {
 	dev->ops->spiWrite(dev, SYS_MASK_ID, SYS_MASK_OFFSET, &dev->sysmask, SYS_MASK_LEN);
 }
-
 /************************Register Read/Write End**************************/
+
+/*************************Operate IC state Start**************************/
+static bool DW_IsClockProblem(DwDevice_st* dev) {
+	bool clkllErr, rfllErr;
+
+	clkllErr = dev->sysstatus[3]&(SYS_STATUS_CLKPLL_LL>>24);
+	rfllErr = dev->sysstatus[3]&(SYS_STATUS_RFPLL_LL>>24);
+	if(clkllErr || rfllErr) {
+		return true;
+	}
+	return false;
+}
+
+static bool DW_IsTransmitDone(DwDevice_st* dev) {
+	return dev->sysstatus[0]&SYS_STATUS_TXFRS;
+}
+
+static void DW_ClearTransmitStatus(DwDevice_st* dev) {
+	// clear latched TX bits
+    uint8_t reg[SYS_STATUS_LEN] = {0};
+    reg[0] |= (SYS_STATUS_TXFRB+SYS_STATUS_TXPRS+SYS_STATUS_TXPHS+SYS_STATUS_TXFRS);
+	dev->ops->spiWrite(dev, SYS_STATUS_ID, SYS_STATUS_OFFSET, reg, SYS_STATUS_LEN);
+}
+
+static bool DW_IsReceiveTimestampAvailable(DwDevice_st* dev) {
+	return dev->sysstatus[1]&(SYS_STATUS_LDEDONE>>8);
+}
+
+static void DW_ClearReceiveTimestampAvailableStatus(DwDevice_st* dev) {
+    uint8_t reg[SYS_STATUS_LEN] = {0};
+    reg[1] |= (SYS_STATUS_LDEDONE>>8);
+	dev->ops->spiWrite(dev, SYS_STATUS_ID, SYS_STATUS_OFFSET, reg, SYS_STATUS_LEN);
+}
+
+static bool DW_IsReceiveFailed(DwDevice_st *dev) {
+	bool ldeErr, rxCRCErr, rxHeaderErr, rxDecodeErr;
+
+    ldeErr = dev->sysstatus[1]&(SYS_STATUS_RXPHE>>8);
+    rxCRCErr = dev->sysstatus[1]&(SYS_STATUS_RXFCE>>8);
+    rxHeaderErr = dev->sysstatus[2]&(SYS_STATUS_RXRFSL>>16);
+    rxDecodeErr = dev->sysstatus[2]&(SYS_STATUS_LDEERR>>16);
+	if(ldeErr || rxCRCErr || rxHeaderErr || rxDecodeErr) {
+		return true;
+	}
+	return false;
+}
+
+static void DW_ClearReceiveStatus(DwDevice_st* dev) {
+	// clear latched RX bits (i.e. write 1 to clear)
+    uint8_t reg[SYS_STATUS_LEN] = {0};
+    reg[1] |= ((SYS_STATUS_LDEDONE+SYS_STATUS_RXPHE+SYS_STATUS_RXDFR+SYS_STATUS_RXFCG+SYS_STATUS_RXFCE)>>8);
+    reg[2] |= ((SYS_STATUS_RXRFSL+SYS_STATUS_RXRFTO+SYS_STATUS_LDEERR)>>16);
+	dev->ops->spiWrite(dev, SYS_STATUS_ID, SYS_STATUS_OFFSET, reg, SYS_STATUS_LEN);
+}
+
+static bool DW_IsReceiveTimeout(DwDevice_st* dev) {
+	return dev->sysstatus[2]&(SYS_STATUS_RXRFTO>>16);
+}
+
+static bool DW_IsReceiveDone(DwDevice_st* dev) {
+	if(dev->frameCheck) {
+		return dev->sysstatus[1]&(SYS_STATUS_RXFCG>>8);
+	}
+	return dev->sysstatus[1]&(SYS_STATUS_RXDFR>>8);
+}
+/*************************Operate IC state Start**************************/
+static float calculatePower(float base, float N, uint8_t pulseFrequency) {
+  float A, corrFac;
+
+	if(TX_PULSE_FREQ_16MHZ == pulseFrequency) {
+		A = 115.72f;
+		corrFac = 2.3334f;
+	} else {
+		A = 121.74f;
+		corrFac = 1.1667f;
+	}
+
+	float estFpPwr = 10.0f * log10f(base / (N * N)) - A;
+
+	if(estFpPwr <= -88) {
+		return estFpPwr;
+	} else {
+		// approximation of Fig. 22 in user manual for dbm correction
+		estFpPwr += (estFpPwr + 88) * corrFac;
+	}
+
+	return estFpPwr;
+}
+
+float DW_GetReceivePower(DwDevice_st* dev) {
+    uint16_t C = 0;
+	uint8_t rxFrameInfo[RX_FINFO_LEN];
+
+    dev->ops->spiRead(dev, RX_FQUAL_ID, CIR_PWR_SUB, &C, LEN_CIR_PWR);
+    dev->ops->spiRead(dev, RX_FINFO_ID, RX_FINFO_OFFSET, rxFrameInfo, RX_FINFO_LEN);
+    uint32_t N = (((unsigned int)rxFrameInfo[2] >> 4) & 0xFF) | ((unsigned int)rxFrameInfo[3] << 4);
+
+    float twoPower17 = 131072.0f;
+
+    return calculatePower(((float)C )* twoPower17, (float)N, dev->pulseFrequency);
+}
+
+void DW_CorrectTimestamp(DwDevice_st* dev, dwTime_t* timestamp) {
+	// base line dBm, which is -61, 2 dBm steps, total 18 data points (down to -95 dBm)
+	float rxPowerBase = -(DW_GetReceivePower(dev) + 61.0f) * 0.5f;
+	if (!isfinite(rxPowerBase)) {
+	  return;
+	}
+	int rxPowerBaseLow = (int)rxPowerBase;
+	int rxPowerBaseHigh = rxPowerBaseLow + 1;
+	if(rxPowerBaseLow < 0) {
+		rxPowerBaseLow = 0;
+		rxPowerBaseHigh = 0;
+	} else if(rxPowerBaseHigh > 17) {
+		rxPowerBaseLow = 17;
+		rxPowerBaseHigh = 17;
+	}
+	// select range low/high values from corresponding table
+	int rangeBiasHigh = 0;
+	int rangeBiasLow = 0;
+	if(dev->channel == CHANNEL_4 || dev->channel == CHANNEL_7) {
+		// 900 MHz receiver bandwidth
+		if(dev->pulseFrequency == TX_PULSE_FREQ_16MHZ) {
+			rangeBiasHigh = (rxPowerBaseHigh < BIAS_900_16_ZERO ? -BIAS_900_16[rxPowerBaseHigh] : BIAS_900_16[rxPowerBaseHigh]);
+			rangeBiasHigh <<= 1;
+			rangeBiasLow = (rxPowerBaseLow < BIAS_900_16_ZERO ? -BIAS_900_16[rxPowerBaseLow] : BIAS_900_16[rxPowerBaseLow]);
+			rangeBiasLow <<= 1;
+		} else if(dev->pulseFrequency == TX_PULSE_FREQ_64MHZ) {
+			rangeBiasHigh = (rxPowerBaseHigh < BIAS_900_64_ZERO ? -BIAS_900_64[rxPowerBaseHigh] : BIAS_900_64[rxPowerBaseHigh]);
+			rangeBiasHigh <<= 1;
+			rangeBiasLow = (rxPowerBaseLow < BIAS_900_64_ZERO ? -BIAS_900_64[rxPowerBaseLow] : BIAS_900_64[rxPowerBaseLow]);
+			rangeBiasLow <<= 1;
+		} else {
+			// TODO proper error handling
+		}
+	} else {
+		// 500 MHz receiver bandwidth
+		if(dev->pulseFrequency == TX_PULSE_FREQ_16MHZ) {
+			rangeBiasHigh = (rxPowerBaseHigh < BIAS_500_16_ZERO ? -BIAS_500_16[rxPowerBaseHigh] : BIAS_500_16[rxPowerBaseHigh]);
+			rangeBiasLow = (rxPowerBaseLow < BIAS_500_16_ZERO ? -BIAS_500_16[rxPowerBaseLow] : BIAS_500_16[rxPowerBaseLow]);
+		} else if(dev->pulseFrequency == TX_PULSE_FREQ_64MHZ) {
+			rangeBiasHigh = (rxPowerBaseHigh < BIAS_500_64_ZERO ? -BIAS_500_64[rxPowerBaseHigh] : BIAS_500_64[rxPowerBaseHigh]);
+			rangeBiasLow = (rxPowerBaseLow < BIAS_500_64_ZERO ? -BIAS_500_64[rxPowerBaseLow] : BIAS_500_64[rxPowerBaseLow]);
+		} else {
+			// TODO proper error handling
+		}
+	}
+	// linear interpolation of bias values
+	float rangeBias = rangeBiasLow + (rxPowerBase - rxPowerBaseLow) * (rangeBiasHigh - rangeBiasLow);
+	// range bias [mm] to timestamp modification value conversion
+	dwTime_t adjustmentTime;
+    adjustmentTime.full = (int)(rangeBias * DISTANCE_OF_RADIO_INV * 0.001f);
+	// apply correction
+	timestamp->full += adjustmentTime.full;
+}
+
+
+void DW_GetTransmitTimestamp(DwDevice_st* dev, dwTime_t* time) {
+	dev->ops->spiRead(dev, TX_TIME_ID, TX_TIME_TX_STAMP_OFFSET, time->raw, TX_TIME_TX_STAMP_LEN);
+}
+
+void DW_GetReceiveTimestamp(DwDevice_st* dev, dwTime_t* time) {
+    time->full = 0;
+	dev->ops->spiRead(dev, RX_TIME_ID, RX_TIME_RX_STAMP_OFFSET, time->raw, RX_TIME_RX_STAMP_LEN);
+	// correct timestamp (i.e. consider range bias)
+	DW_CorrectTimestamp(dev, time);
+}
+
+unsigned int DW_GetDataLength(DwDevice_st* dev) {
+	unsigned int len = 0;
+	if(dev->deviceMode == TX_MODE) {
+		// 10 bits of TX frame control register
+		len = ((((unsigned int)dev->txfctrl[1] << 8) | (unsigned int)dev->txfctrl[0]) & 0x03FF);
+	} else if(dev->deviceMode == RX_MODE) {
+		// 10 bits of RX frame control register
+		uint8_t rxFrameInfo[RX_FINFO_LEN];
+		dev->ops->spiRead(dev, RX_FINFO_ID, RX_FINFO_OFFSET, rxFrameInfo, RX_FINFO_LEN);
+		len = ((((unsigned int)rxFrameInfo[1] << 8) | (unsigned int)rxFrameInfo[0]) & 0x03FF);
+	}
+	if(dev->frameCheck && len > 2) {
+		return len-2;
+	}
+	return len;
+}
+
+void DW_GetData(DwDevice_st* dev, uint8_t data[], unsigned int n) {
+	if(n <= 0) {
+		return;
+	}
+	dev->ops->spiRead(dev, RX_BUFFER_ID, RX_BUFFER_OFFSET, data, n);
+}
+
+void DW_SetData(DwDevice_st* dev, uint8_t data[], unsigned int n) {
+	if(dev->frameCheck) {
+		n+=2; // two bytes CRC-16
+	}
+	if(n > LEN_EXT_UWB_FRAMES) {
+		return; // TODO proper error handling: frame/buffer size
+	}
+	if(n > LEN_UWB_FRAMES && !dev->extendedFrameLength) {
+		return; // TODO proper error handling: frame/buffer size
+	}
+	// transmit data and length
+	dev->ops->spiWrite(dev, TX_BUFFER_ID, TX_BUFFER_OFFSE, data, n);
+	dev->txfctrl[0] = (uint8_t)(n & 0xFF); // 1 byte (regular length + 1 bit)
+	dev->txfctrl[1] &= 0xE0;
+	dev->txfctrl[1] |= (uint8_t)((n >> 8) & 0x03);	// 2 added bits if extended length
+}
+
+void DW_NewReceive(DwDevice_st* dev) {
+	DW_Idle(dev);
+	memset(&dev->sysctrl, 0, SYS_CTRL_LEN);
+	DW_ClearReceiveStatus(dev);
+	dev->deviceMode = RX_MODE;
+}
+
+void DW_StartReceive(DwDevice_st* dev) {
+    if(dev->frameCheck)
+    {
+        dev->sysctrl &= ~SYS_CTRL_SFCST;
+    }
+    else
+    {
+        dev->sysctrl |= SYS_CTRL_SFCST;
+    }
+    dev->sysctrl |= SYS_CTRL_RXENAB;
+	dev->ops->spiWrite(dev, SYS_CTRL_ID, SYS_CTRL_OFFSET, &dev->sysctrl, SYS_CTRL_LEN);
+}
+
+void DW_NewTransmit(DwDevice_st* dev) {
+	DW_Idle(dev);
+	memset(&dev->sysctrl, 0, SYS_CTRL_LEN);
+	DW_ClearTransmitStatus(dev);
+	dev->deviceMode = TX_MODE;
+}
+
+void DW_StartTransmit(DwDevice_st* dev) {
+	DW_WriteTransmitFrameControlRegister(dev);
+    if(dev->frameCheck)
+    {
+        dev->sysctrl &= ~SYS_CTRL_SFCST;
+    }
+    else
+    {
+        dev->sysctrl |= SYS_CTRL_SFCST;
+    }
+    dev->sysctrl |= SYS_CTRL_TXSTRT;
+	dev->ops->spiWrite(dev, SYS_CTRL_ID, SYS_CTRL_OFFSET, &dev->sysctrl, SYS_CTRL_LEN);
+	if(dev->permanentReceive) {
+		memset(&dev->sysctrl, 0, SYS_CTRL_LEN);
+		dev->deviceMode = RX_MODE;
+		DW_StartReceive(dev);
+	} else if (dev->wait4resp) {
+        dev->deviceMode = RX_MODE;
+    } else {
+		dev->deviceMode = IDLE_MODE;
+	}
+}
+
+void DW_WaitForResponse(DwDevice_st* dev, bool val) {
+    dev->wait4resp = val;
+    if(val)
+    {
+        dev->sysctrl |= SYS_CTRL_WAIT4RESP;
+    }
+    else
+    {
+        dev->sysctrl &= ~SYS_CTRL_WAIT4RESP;
+    }
+}
+
 static void DW_AttachSentHandler(DwDevice_st *dev, dwHandler_t handler)
 {
     dev->handleSent = handler;
@@ -916,7 +1223,7 @@ static void DW_CommitConfiguration(DwDevice_st* dev) {
     dev->ops->spiWrite(dev, LDE_IF_ID, LDE_RXANTD_OFFSET, dev->antennaDelay.raw, LDE_RXANTD_LEN);
 }
 
-static void DW_SetDefaults(DwDevice_st* dev) {
+void DW_SetDefaults(DwDevice_st* dev) {
 	if(dev->deviceMode == TX_MODE) {
 
 	} else if(dev->deviceMode == RX_MODE) {
@@ -1050,6 +1357,7 @@ static void DW_Devcie_Init( DwDevice_st *dev )
     dev->extendedFrameLength = FRAME_LENGTH_NORMAL;
     dev->smartPower = false;
     dev->frameCheck = true;
+    dev->permanentReceive = false;
     dev->dataRate = TRX_RATE_6800KBPS;
     dev->pulseFrequency = TX_PULSE_FREQ_16MHZ;
     dev->preambleLength = TX_PREAMBLE_LEN_128;
@@ -1079,6 +1387,7 @@ static void DW_Devcie_Init( DwDevice_st *dev )
 static HAL_StatusTypeDef DW_Config( DwDevice_st *dev)
 {
     DW_GPIO_Config();
+    DW_NVIC_Config();
     DW_SPI_Config();
 
     DW_SetClock(dwClockAuto);
@@ -1114,7 +1423,7 @@ static HAL_StatusTypeDef DW_Config( DwDevice_st *dev)
 
 HAL_StatusTypeDef DW_Init(void)
 {
-    HAL_StatusTypeDef hal_status = HAL_ERROR;
+    HAL_StatusTypeDef hal_status = HAL_OK;
 
     DW_Devcie_Init(&dw_devcie);
     hal_status = DW_Config(&dw_devcie);
@@ -1147,7 +1456,70 @@ HAL_StatusTypeDef DW_Init(void)
     DW_SetPreambleCode(&dw_devcie, PREAMBLE_CODE_64MHZ_9);
     DW_CommitConfiguration(&dw_devcie);
 
+    algorithm->init(&config_t, &dw_devcie);
     return hal_status;
 }
 
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    switch (GPIO_Pin) {
+        case DW_IRQ_PIN:
+            irq_flag = true;
+            HAL_NVIC_ClearPendingIRQ(DW_IRQn);
+        break;
+            default:
+        break;
+    }
+}
 
+void HAL_SYSTICK_Callback(void)
+{
+    if(dw_event_timeout)
+    {
+        dw_event_timeout--;
+    }
+}
+
+static int checkIrq()
+{
+    return HAL_GPIO_ReadPin(DW_IRQ_PORT, DW_IRQ_PIN);
+}
+
+static void DW_HandleInterrupt(DwDevice_st *dev) {
+	// read current status and handle via callbacks
+	DW_ReadSystemEventStatusRegister(dev);
+	if(DW_IsClockProblem(dev)) {
+		 /* TODO handle error */ 
+	}
+	if(DW_IsTransmitDone(dev) && dev->handleSent != 0) {
+        DW_ClearTransmitStatus(dev);
+		(*dev->handleSent)(dev);
+	}
+	if(DW_IsReceiveTimestampAvailable(dev)) {
+        DW_ClearReceiveTimestampAvailableStatus(dev);
+	}
+	if(DW_IsReceiveFailed(dev) && dev->handleReceiveFailed != 0) {
+        DW_ClearReceiveStatus(dev);
+		dev->handleReceiveFailed(dev);
+	} else if(DW_IsReceiveTimeout(dev) && dev->handleReceiveTimeout != 0) {
+        DW_ClearReceiveStatus(dev);
+		(*dev->handleReceiveTimeout)(dev);
+	} else if(DW_IsReceiveDone(dev) && dev->handleReceived != 0) {
+        DW_ClearReceiveStatus(dev);
+		(*dev->handleReceived)(dev);
+	}
+}
+
+void DW_Task(void)
+{
+    if(!dw_event_timeout)
+    {
+        dw_event_timeout = algorithm->onEvent(&dw_devcie, eventTimeout);
+    }
+    if(irq_flag)
+    {
+        do{
+            DW_HandleInterrupt(&dw_devcie);
+        } while(checkIrq() != 0);
+    }   
+}

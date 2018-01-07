@@ -1,14 +1,6 @@
-#include "uwb.h"
-
 #include <string.h>
 #include <stdio.h>
-
-#include "cfg.h"
-#include "led.h"
-
-#include "libdw1000.h"
-
-#include "dwOps.h"
+#include "dw1000.h"
 #include "mac.h"
 
 static uint8_t base_address[] = {0,0,0,0,0,0,0xcf,0xbc};
@@ -66,10 +58,10 @@ uwbConfig_t config;
 // #define printf(...)
 #define debug(...) // printf(__VA_ARGS__)
 
-static void txcallback(dwDevice_t *dev)
+static void txcallback(DwDevice_st *dev)
 {
   dwTime_t departure;
-  dwGetTransmitTimestamp(dev, &departure);
+  DW_GetTransmitTimestamp(dev, &departure);
   departure.full += (ANTENNA_DELAY/2);
 
   debug("TXCallback\r\n");
@@ -87,9 +79,9 @@ static void txcallback(dwDevice_t *dev)
 #define TYPE 0
 #define SEQ 1
 
-static void rxcallback(dwDevice_t *dev) {
+static void rxcallback(DwDevice_st *dev) {
   dwTime_t arival = { .full=0 };
-  int dataLength = dwGetDataLength(dev);
+  int dataLength = DW_GetDataLength(dev);
 
   if (dataLength == 0) return;
 
@@ -97,13 +89,13 @@ static void rxcallback(dwDevice_t *dev) {
 
   debug("RXCallback(%d): ", dataLength);
 
-  dwGetData(dev, (uint8_t*)&rxPacket, dataLength);
+  DW_GetData(dev, (uint8_t*)&rxPacket, dataLength);
 
   if (memcmp(rxPacket.destAddress, config.address, 8)) {
     debug("Not for me! for %02x with %02x\r\n", rxPacket.destAddress[0], rxPacket.payload[0]);
-    dwNewReceive(dev);
-    dwSetDefaults(dev);
-    dwStartReceive(dev);
+    DW_NewReceive(dev);
+    DW_SetDefaults(dev);
+    DW_StartReceive(dev);
     return;
   }
 
@@ -123,13 +115,13 @@ static void rxcallback(dwDevice_t *dev) {
       txPacket.payload[0] = FINAL;
       txPacket.payload[SEQ] = rxPacket.payload[SEQ];
 
-      dwNewTransmit(dev);
-      dwSetData(dev, (uint8_t*)&txPacket, MAC802154_HEADER_LENGTH+2);
+      DW_NewTransmit(dev);
+      DW_SetData(dev, (uint8_t*)&txPacket, MAC802154_HEADER_LENGTH+2);
 
-      dwWaitForResponse(dev, true);
-      dwStartTransmit(dev);
+      DW_WaitForResponse(dev, true);
+      DW_StartTransmit(dev);
 
-      dwGetReceiveTimestamp(dev, &arival);
+      DW_GetReceiveTimestamp(dev, &arival);
       arival.full -= (ANTENNA_DELAY/2);
       answer_rx = arival;
       break;
@@ -174,7 +166,7 @@ static void rxcallback(dwDevice_t *dev) {
 
       printf("distance %d: %5dmm\r\n", rxPacket.sourceAddress[0], (unsigned int)(distance*1000));
 
-      dwGetReceiveTimestamp(dev, &arival);
+      DW_GetReceiveTimestamp(dev, &arival);
       arival.full -= (ANTENNA_DELAY/2);
       printf("Total in-air time (ctn): 0x%08x\r\n", (unsigned int)(arival.low32-poll_tx.low32));
 
@@ -183,7 +175,7 @@ static void rxcallback(dwDevice_t *dev) {
   }
 }
 
-void initiateRanging(dwDevice_t *dev)
+void initiateRanging(DwDevice_st *dev)
 {
   printf ("Interrogating anchor %d\r\n",  config.anchors[curr_anchor]);
   base_address[0] =  config.anchors[curr_anchor];
@@ -191,7 +183,7 @@ void initiateRanging(dwDevice_t *dev)
   if (curr_anchor > config.anchorListSize) {
     curr_anchor = 0;
   }
-  dwIdle(dev);
+  DW_Idle(dev);
 
   txPacket.payload[TYPE] = POLL;
   txPacket.payload[SEQ] = ++curr_seq;
@@ -199,15 +191,15 @@ void initiateRanging(dwDevice_t *dev)
   memcpy(txPacket.sourceAddress, config.address, 8);
   memcpy(txPacket.destAddress, base_address, 8);
 
-  dwNewTransmit(dev);
-  dwSetDefaults(dev);
-  dwSetData(dev, (uint8_t*)&txPacket, MAC802154_HEADER_LENGTH+2);
+  DW_NewTransmit(dev);
+  DW_SetDefaults(dev);
+  DW_SetData(dev, (uint8_t*)&txPacket, MAC802154_HEADER_LENGTH+2);
 
-  dwWaitForResponse(dev, true);
-  dwStartTransmit(dev);
+  DW_WaitForResponse(dev, true);
+  DW_StartTransmit(dev);
 }
 
-static uint32_t twrTagOnEvent(dwDevice_t *dev, uwbEvent_t event)
+static uint32_t twrTagOnEvent(DwDevice_st *dev, uwbEvent_t event)
 {
   switch(event) {
     case eventPacketReceived:
@@ -228,17 +220,15 @@ static uint32_t twrTagOnEvent(dwDevice_t *dev, uwbEvent_t event)
       return 10;
       break;
     default:
-      configASSERT(false);
+      //TODO:Handle Error
+      break;
   }
 
   return MAX_TIMEOUT;
 }
 
-static void twrTagInit(uwbConfig_t * newconfig, dwDevice_t *dev)
+static void twrTagInit(uwbConfig_t * newconfig, DwDevice_st *dev)
 {
-  // Set the LED for anchor mode
-  ledOn(ledMode);
-
   config = *newconfig;
 
   // Initialize the packet in the TX buffer

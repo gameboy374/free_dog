@@ -1,17 +1,8 @@
-#include "uwb.h"
-
 #include <string.h>
 #include <stdio.h>
-
-#include "cfg.h"
-#include "led.h"
-
-#include "lpp.h"
-
-#include "libdw1000.h"
-
-#include "dwOps.h"
 #include "mac.h"
+#include "lpp.h"
+#include "dw1000.h"
 
 uint8_t base_address[] = {0,0,0,0,0,0,0xcf,0xbc};
 
@@ -74,10 +65,10 @@ static volatile uint8_t curr_tag = 0;
 // #define printf(...)
 #define debug(...) // printf(__VA_ARGS__)
 
-static void txcallback(dwDevice_t *dev)
+static void txcallback(DwDevice_st *dev)
 {
   dwTime_t departure;
-  dwGetTransmitTimestamp(dev, &departure);
+  DW_GetTransmitTimestamp(dev, &departure);
   departure.full += (ANTENNA_DELAY/2);
 
   debug("TXCallback: ");
@@ -99,9 +90,9 @@ static void txcallback(dwDevice_t *dev)
 #define LPP_TYPE 3
 #define LPP_PAYLOAD 4
 
-static void rxcallback(dwDevice_t *dev) {
+static void rxcallback(DwDevice_st *dev) {
   dwTime_t arival = { .full=0 };
-  int dataLength = dwGetDataLength(dev);
+  int dataLength = DW_GetDataLength(dev);
 
   if (dataLength == 0) return;
 
@@ -109,13 +100,13 @@ static void rxcallback(dwDevice_t *dev) {
 
   debug("RXCallback(%d): ", dataLength);
 
-  dwGetData(dev, (uint8_t*)&rxPacket, dataLength);
+  DW_GetData(dev, (uint8_t*)&rxPacket, dataLength);
 
   if (memcmp(rxPacket.destAddress, config.address, 8)) {
     debug("Not for me! for %02x with %02x\r\n", rxPacket.destAddress[0], rxPacket.payload[0]);
-    dwNewReceive(dev);
-    dwSetDefaults(dev);
-    dwStartReceive(dev);
+    DW_NewReceive(dev);
+    DW_SetDefaults(dev);
+    DW_StartReceive(dev);
     return;
   }
 
@@ -127,7 +118,6 @@ static void rxcallback(dwDevice_t *dev) {
     case POLL:
       debug("POLL from %02x at %04x\r\n", rxPacket.sourceAddress[0], (unsigned int)arival.low32);
       rangingTick = HAL_GetTick();
-      ledBlink(ledRanging, true);
 
       curr_tag = rxPacket.sourceAddress[0];
 
@@ -135,25 +125,24 @@ static void rxcallback(dwDevice_t *dev) {
       txPacket.payload[TYPE] = ANSWER;
       txPacket.payload[SEQ] = rxPacket.payload[SEQ];
 
-      uwbConfig_t *uwbConfig = uwbGetConfig();
-      if (uwbConfig->positionEnabled) {
+      if (config.positionEnabled) {
         txPacket.payload[LPP_HEADER] = SHORT_LPP;
         txPacket.payload[LPP_TYPE] = LPP_SHORT_ANCHOR_POSITION;
 
         struct lppShortAnchorPosition_s *pos = (struct lppShortAnchorPosition_s*) &txPacket.payload[LPP_PAYLOAD];
-        memcpy(pos->position, uwbConfig->position, 3*sizeof(float));
+        memcpy(pos->position, config.position, 3*sizeof(float));
 
         payloadLength += 2 + sizeof(struct lppShortAnchorPosition_s);
       }
 
-      dwNewTransmit(dev);
-      dwSetDefaults(dev);
-      dwSetData(dev, (uint8_t*)&txPacket, MAC802154_HEADER_LENGTH+payloadLength);
+      DW_NewTransmit(dev);
+      DW_SetDefaults(dev);
+      DW_SetData(dev, (uint8_t*)&txPacket, MAC802154_HEADER_LENGTH+payloadLength);
 
-      dwWaitForResponse(dev, true);
-      dwStartTransmit(dev);
+      DW_WaitForResponse(dev, true);
+      DW_StartTransmit(dev);
 
-      dwGetReceiveTimestamp(dev, &arival);
+      DW_GetReceiveTimestamp(dev, &arival);
       arival.full -= (ANTENNA_DELAY/2);
       poll_rx = arival;
       break;
@@ -164,7 +153,7 @@ static void rxcallback(dwDevice_t *dev) {
 
         debug("FINAL\r\n");
 
-        dwGetReceiveTimestamp(dev, &arival);
+        DW_GetReceiveTimestamp(dev, &arival);
         arival.full -= (ANTENNA_DELAY/2);
         final_rx = arival;
 
@@ -178,16 +167,16 @@ static void rxcallback(dwDevice_t *dev) {
         report->asl = asl;
         report->pressure_ok = pressure_ok;
 
-        dwNewTransmit(dev);
-        dwSetDefaults(dev);
-        dwSetData(dev, (uint8_t*)&txPacket, MAC802154_HEADER_LENGTH+2+sizeof(reportPayload_t));
+        DW_NewTransmit(dev);
+        DW_SetDefaults(dev);
+        DW_SetData(dev, (uint8_t*)&txPacket, MAC802154_HEADER_LENGTH+2+sizeof(reportPayload_t));
 
-        dwWaitForResponse(dev, true);
-        dwStartTransmit(dev);
+        DW_WaitForResponse(dev, true);
+        DW_StartTransmit(dev);
       } else {
-        dwNewReceive(dev);
-        dwSetDefaults(dev);
-        dwStartReceive(dev);
+        DW_NewReceive(dev);
+        DW_SetDefaults(dev);
+        DW_StartReceive(dev);
       }
 
       break;
@@ -198,16 +187,16 @@ static void rxcallback(dwDevice_t *dev) {
         lppHandleShortPacket(&rxPacket.payload[1], dataLength-MAC802154_HEADER_LENGTH-1);
       }
 
-      dwNewReceive(dev);
-      dwSetDefaults(dev);
-      dwStartReceive(dev);
+      DW_NewReceive(dev);
+      DW_SetDefaults(dev);
+      DW_StartReceive(dev);
 
       break;
     }
   }
 }
 
-static uint32_t twrAnchorOnEvent(dwDevice_t *dev, uwbEvent_t event)
+static uint32_t twrAnchorOnEvent(DwDevice_st *dev, uwbEvent_t event)
 {
   switch(event) {
     case eventPacketReceived:
@@ -218,21 +207,20 @@ static uint32_t twrAnchorOnEvent(dwDevice_t *dev, uwbEvent_t event)
       break;
     case eventTimeout:
     case eventReceiveFailed:
-      dwNewReceive(dev);
-      dwSetDefaults(dev);
-      dwStartReceive(dev);
+      DW_NewReceive(dev);
+      DW_SetDefaults(dev);
+      DW_StartReceive(dev);
       break;
     default:
-      configASSERT(false);
+      //TODO:Handle Error
+      break;
   }
 
   return MAX_TIMEOUT;
 }
 
-static void twrAnchorInit(uwbConfig_t * newconfig, dwDevice_t *dev)
+static void twrAnchorInit(uwbConfig_t * newconfig, DwDevice_st *dev)
 {
-  // Set the LED for anchor mode
-  ledOn(ledMode);
 
   config = *newconfig;
 

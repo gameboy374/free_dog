@@ -157,7 +157,10 @@ extern "C" {
  * @brief Bit definitions for register TX_BUFFER
 **/
 #define TX_BUFFER_ID            0x09            /* Transmit Data Buffer */
+#define TX_BUFFER_OFFSE         0
 #define TX_BUFFER_LEN           (1024)
+#define LEN_UWB_FRAMES          127
+#define LEN_EXT_UWB_FRAMES      1023
 
 /****************************************************************************//**
  * @brief Bit definitions for register  DX_TIME
@@ -361,6 +364,7 @@ extern "C" {
  * @brief Bit definitions for register RX_BUFFER
 **/
 #define RX_BUFFER_ID            0x11            /* Receive Data Buffer (in double buffer set) */
+#define RX_BUFFER_OFFSET        0
 #define RX_BUFFER_LEN           (1024)
 
 
@@ -390,6 +394,14 @@ extern "C" {
 #define RX_EQUAL_CIR_MXG_SHIFT  (48)
 #define CIR_MXG_MASK            RX_EQUAL_CIR_MXG_MASK
 #define CIR_MXG_SHIFT           RX_EQUAL_CIR_MXG_SHIFT
+#define STD_NOISE_SUB           0x00
+#define FP_AMPL2_SUB            0x02
+#define FP_AMPL3_SUB            0x04
+#define CIR_PWR_SUB             0x06
+#define LEN_STD_NOISE           2
+#define LEN_FP_AMPL2            2
+#define LEN_FP_AMPL3            2
+#define LEN_CIR_PWR             2
 
 
 
