@@ -72,6 +72,11 @@ static void writeValueToBytes(unsigned char data[], long val, unsigned int n) {
 	}
 }
 
+struct uwbConfig_s * DW_GetConfig(void)
+{
+  return &config_t;
+}
+
 static void DW_ReadData(DwDevice_st *dev, unsigned short regAddr, unsigned short subIndex, void *readBuf, unsigned int lens )
 {
   unsigned char header[3];
@@ -224,23 +229,22 @@ static void DW_SPI_Config(void)
     }
 }
 
-static uint32_t timeout;
 static void txcallback(DwDevice_st *dev)
 {
-  timeout = algorithm->onEvent(dev, eventPacketSent);
+  dw_event_timeout = algorithm->onEvent(dev, eventPacketSent);
 }
 
 static void rxcallback(DwDevice_st *dev)
 {
-  timeout = algorithm->onEvent(dev, eventPacketReceived);
+  dw_event_timeout = algorithm->onEvent(dev, eventPacketReceived);
 }
 
 static void rxTimeoutCallback(DwDevice_st * dev) {
-  timeout = algorithm->onEvent(dev, eventReceiveTimeout);
+  dw_event_timeout = algorithm->onEvent(dev, eventReceiveTimeout);
 }
 
 static void rxfailedcallback(DwDevice_st *dev) {
-  timeout = algorithm->onEvent(dev, eventReceiveFailed);
+  dw_event_timeout = algorithm->onEvent(dev, eventReceiveFailed);
 }
 
 /************************Register Configurate Start**************************/

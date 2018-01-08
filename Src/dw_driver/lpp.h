@@ -15,7 +15,7 @@ void lppHandleShortPacket(char *data, size_t length);
 
 struct lppShortAnchorPosition_s {
   float position[3];
-} __attribute__((packed));
+};
 
 #define LPP_SHORT_REBOOT_TO_BOOTLOADER 0x00
 #define LPP_SHORT_REBOOT_TO_FIRMWARE 0x01

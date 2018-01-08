@@ -20,8 +20,8 @@ typedef struct packet_s {
         uint16_t destAddrMode:2;
         uint16_t version:2;
         uint16_t srcAddrMode:2;
-      } fcf_s;
-    };
+      } __attribute__((packed))fcf_s;
+    }__attribute__((packed));
 
     uint8_t seq;
     uint16_t pan;

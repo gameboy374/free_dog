@@ -111,5 +111,6 @@ void DW_NewTransmit(DwDevice_st* dev);
 void DW_StartTransmit(DwDevice_st* dev);
 void DW_WaitForResponse(DwDevice_st* dev, bool val);
 void DW_SetDefaults(DwDevice_st* dev);
+struct uwbConfig_s * DW_GetConfig(void);
 
 #endif

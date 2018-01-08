@@ -93,10 +93,11 @@ static void txcallback(DwDevice_st *dev)
 static void rxcallback(DwDevice_st *dev) {
   dwTime_t arival = { .full=0 };
   int dataLength = DW_GetDataLength(dev);
+  int payloadLength = 2;
 
   if (dataLength == 0) return;
 
-  bzero(&rxPacket, MAC802154_HEADER_LENGTH);
+  memset(&rxPacket, 0, MAC802154_HEADER_LENGTH);
 
   debug("RXCallback(%d): ", dataLength);
 
@@ -121,7 +122,6 @@ static void rxcallback(DwDevice_st *dev) {
 
       curr_tag = rxPacket.sourceAddress[0];
 
-      int payloadLength = 2;
       txPacket.payload[TYPE] = ANSWER;
       txPacket.payload[SEQ] = rxPacket.payload[SEQ];
 
@@ -184,7 +184,7 @@ static void rxcallback(DwDevice_st *dev) {
     case SHORT_LPP:
     {
       if(curr_tag == rxPacket.sourceAddress[0] && dataLength-MAC802154_HEADER_LENGTH > 1) {
-        lppHandleShortPacket(&rxPacket.payload[1], dataLength-MAC802154_HEADER_LENGTH-1);
+        lppHandleShortPacket((char *)&rxPacket.payload[1], dataLength-MAC802154_HEADER_LENGTH-1);
       }
 
       DW_NewReceive(dev);

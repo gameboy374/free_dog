@@ -85,7 +85,7 @@ static void rxcallback(DwDevice_st *dev) {
 
   if (dataLength == 0) return;
 
-  bzero(&rxPacket, MAC802154_HEADER_LENGTH);
+  memset(&rxPacket, 0, MAC802154_HEADER_LENGTH);
 
   debug("RXCallback(%d): ", dataLength);
 
@@ -201,30 +201,31 @@ void initiateRanging(DwDevice_st *dev)
 
 static uint32_t twrTagOnEvent(DwDevice_st *dev, uwbEvent_t event)
 {
-  switch(event) {
-    case eventPacketReceived:
-      rxcallback(dev);
-      // 10ms between rangings
-      return 10;
-      break;
-    case eventPacketSent:
-      txcallback(dev);
-      return 10;
-      break;
-    case eventTimeout:
-      initiateRanging(dev);
-      return 10;
-      break;
-    case eventReceiveFailed:
-      // Try again ranging in 10ms
-      return 10;
-      break;
-    default:
-      //TODO:Handle Error
-      break;
-  }
+    uint32_t timeout_val = MAX_TIMEOUT;
+    switch(event) {
+        case eventPacketReceived:
+          rxcallback(dev);
+          // 10ms between rangings
+          timeout_val = 10;
+          break;
+        case eventPacketSent:
+          txcallback(dev);
+          timeout_val = 10;
+          break;
+        case eventTimeout:
+          initiateRanging(dev);
+          timeout_val = 10;
+          break;
+        case eventReceiveFailed:
+          // Try again ranging in 10ms
+          timeout_val = 10;
+          break;
+        default:
+          //TODO:Handle Error
+          break;
+    }
 
-  return MAX_TIMEOUT;
+    return timeout_val;
 }
 
 static void twrTagInit(uwbConfig_t * newconfig, DwDevice_st *dev)
