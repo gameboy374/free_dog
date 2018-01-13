@@ -55,7 +55,7 @@ static volatile uint8_t curr_seq = 0;
 static int curr_anchor = 0;
 uwbConfig_t config;
 
-// #define printf(...)
+ #define printf(...)
 #define debug(...) // printf(__VA_ARGS__)
 
 static void txcallback(DwDevice_st *dev)

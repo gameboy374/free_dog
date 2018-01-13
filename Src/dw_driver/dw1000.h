@@ -99,6 +99,7 @@ typedef struct uwbAlgorithm_s {
 #define MAX_TIMEOUT             2000            //unit:ms
 
 HAL_StatusTypeDef DW_Init(void);
+void DW_Task(void);
 void DW_Idle(DwDevice_st* dev);
 void DW_GetTransmitTimestamp(DwDevice_st* dev, dwTime_t* time);
 void DW_GetReceiveTimestamp(DwDevice_st* dev, dwTime_t* time);

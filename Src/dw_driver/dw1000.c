@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 
+
 /**************/
 #define     TWR_ANCHOR              0
 #define     TWR_TAG                 1
@@ -218,7 +219,7 @@ static void DW_SPI_Config(void)
     dw_devcie.handle->Init.CLKPolarity = SPI_POLARITY_LOW;
     dw_devcie.handle->Init.CLKPhase = SPI_PHASE_1EDGE;
     dw_devcie.handle->Init.NSS = SPI_NSS_SOFT;
-    dw_devcie.handle->Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_128;//SPI_BAUDRATEPRESCALER_2;
+    dw_devcie.handle->Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
     dw_devcie.handle->Init.FirstBit = SPI_FIRSTBIT_MSB;
     dw_devcie.handle->Init.TIMode = SPI_TIMODE_DISABLE;
     dw_devcie.handle->Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -1390,6 +1391,10 @@ static void DW_Devcie_Init( DwDevice_st *dev )
 
 static HAL_StatusTypeDef DW_Config( DwDevice_st *dev)
 {
+    //arron test start
+    uint32_t temp = 0;
+    //arron test end
+    
     DW_GPIO_Config();
     DW_NVIC_Config();
     DW_SPI_Config();
@@ -1411,8 +1416,13 @@ static HAL_StatusTypeDef DW_Config( DwDevice_st *dev)
     }
     DW_SetDoubleBuffering(dev, false);              
     DW_SetInterruptPolarity(dev, true);
+     //arron test start
+    //dev->ops->spiRead(dev, SYS_CFG_ID, SYS_CFG_OFFSET, &temp, SYS_CFG_LEN);
+    //arron test end
     DW_WriteSystemConfigurationRegister(dev);
-
+    //arron test start
+    //dev->ops->spiRead(dev, SYS_CFG_ID, SYS_CFG_OFFSET, &temp, SYS_CFG_LEN);
+    //arron test end
     DW_WriteSystemEventMaskRegister(dev);
     //LDE
     DW_SetClock(dwClockXti);
@@ -1431,6 +1441,9 @@ HAL_StatusTypeDef DW_Init(void)
 
     DW_Devcie_Init(&dw_devcie);
     hal_status = DW_Config(&dw_devcie);
+    //arron test start
+    //return HAL_ERROR;
+    //arron test end
     if(HAL_OK != hal_status)
     {
         return hal_status;

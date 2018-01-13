@@ -93,7 +93,10 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_RTC_Init();
 
-  DW_Init();
+  if(HAL_OK != DW_Init())
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
   
   /* USER CODE BEGIN 2 */
 
@@ -104,7 +107,7 @@ int main(void)
   while (1)
   {
   /* USER CODE END WHILE */
-
+        DW_Task();
   /* USER CODE BEGIN 3 */
 
   }

@@ -62,7 +62,7 @@ static packet_t rxPacket;
 static packet_t txPacket;
 static volatile uint8_t curr_tag = 0;
 
-// #define printf(...)
+ #define printf(...)
 #define debug(...) // printf(__VA_ARGS__)
 
 static void txcallback(DwDevice_st *dev)
